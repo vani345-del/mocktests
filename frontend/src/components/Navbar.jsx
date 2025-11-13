@@ -1,11 +1,13 @@
-import React, { useState } from "react";
+import React, { useState ,useEffect} from "react";
 import { IoMdPerson } from "react-icons/io";
 import { GiHamburgerMenu, GiSplitCross } from "react-icons/gi";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { FaShoppingCart } from "react-icons/fa";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { useDispatch, useSelector } from "react-redux";
 import { setUserData } from "../redux/userSlice";
+import { fetchCart, clearCart } from "../redux/cartSlice";
 
 function Navbar() {
   const [showHam, setShowHam] = useState(false);
@@ -14,13 +16,22 @@ function Navbar() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { userData } = useSelector((state) => state.user);
+  const { items: cartItems } = useSelector((state) => state.cart);
   const serverUrl = import.meta.env.VITE_SERVER_URL;
+
+
+  useEffect(() => {
+    if (userData) {
+      dispatch(fetchCart());
+    }
+  }, [userData, dispatch]);
 
   const handleLogout = async () => {
     setLoading(true);
     try {
       await axios.get(`${serverUrl}/api/auth/logout`, { withCredentials: true });
       dispatch(setUserData(null));
+      dispatch(clearCart());
       toast.success("Logged out successfully");
     } catch (error) {
       console.log(error.response?.data?.message);
@@ -62,6 +73,18 @@ function Navbar() {
             {/* ✅ Right Side: Auth Buttons */}
             <div className="hidden md:flex items-center space-x-4 relative">
               {/* Profile icon */}
+
+              {userData && (
+                <Link to="/cart" className="relative text-gray-600 hover:text-blue-600 p-2">
+                  <FaShoppingCart className="w-6 h-6" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </Link>
+              )}
+              
               {!userData ? (
                 <IoMdPerson
                   className="w-[45px] h-[45px] p-2 bg-black text-white rounded-full cursor-pointer border-2 border-white"

@@ -33,7 +33,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-
+  cart: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MockTest", // Reference the MockTest model
+      },
+    ],
     // 🔒 account management
     isVerified: {
       type: Boolean,

@@ -21,6 +21,8 @@ import EditMocktestPage from "./components/admin/EditMocktestPage";
 import AdminQuestions from "./components/admin/AdminQuestions";
 import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
+import Cart from "./pages/Cart";
+import Checkout from "./pages/Checkout";
 
 // Layout for public routes
 const MainLayout = ({ children }) => {
@@ -66,6 +68,15 @@ const App = () => {
            <Route path="/student/test/:attemptId" element={<WriteMocktest />} />
            <Route path="/mocktests" element={<AllMockTests />} />
               <Route path="/mocktests/:id" element={<MockTestDetail />} /> 
+
+              {/* --- ADD THESE CART & CHECKOUT ROUTES --- */}
+          <Route path="/cart" element={<Cart />} />
+          <Route 
+            path="/checkout" 
+            element={
+              userData ? <Checkout /> : <Navigate to="/login" replace />
+            } 
+          />
 
           {/* ✅ Admin layout (Sidebar + nested pages) */}
           <Route

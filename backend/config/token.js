@@ -2,14 +2,12 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const genToken=async(userId)=>{
-    try{
-        const token=await jwt.sign({userId},process.env.JWT_SECRET,{expiresIn:"7d"});
-        return token
-        console.log(token);
-    }catch(error){
-        console.log(error);
-   
-    };
-}
+const genToken = (userId) => {
+  return jwt.sign(
+    { id: userId.toString() },  // ⬅ IMPORTANT FIX (not userId)
+    process.env.JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+};
+
 export default genToken;

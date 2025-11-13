@@ -1,7 +1,9 @@
 import React, { useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchPublicTestById } from "../redux/mockTestSlice";
+import { addItemToCart } from "../redux/cartSlice"; // <-- ADD
+import { toast } from "react-toastify";
 import {
   FaClock,
   FaQuestionCircle,
@@ -28,6 +30,7 @@ const DetailItem = ({ icon, label, value }) => (
 export default function MockTestDetail() {
   const { id } = useParams();
   const dispatch = useDispatch();
+  const navigate = useNavigate(); 
 
   const {
     currentTest: test,
@@ -35,16 +38,28 @@ export default function MockTestDetail() {
     currentTestError: error,
   } = useSelector((state) => state.mocktest);
 
+  // --- ADD THIS ---
+  const { userData } = useSelector((state) => state.user);
+  const { items: cartItems } = useSelector((state) => state.cart);
+  const isAlreadyInCart = cartItems.some(item => item._id === id);
+
   useEffect(() => {
     if (id) {
       dispatch(fetchPublicTestById(id));
     }
   }, [dispatch, id]);
 
-  const handleBuyNow = () => {
-    // Logic for handling purchase (e.g., redirect to payment, add to cart)
-    console.log("Buy Now clicked for test:", test._id);
-    alert("Buy Now functionality not yet implemented.");
+const handleAddToCart = () => {
+    if (!userData) {
+      toast.error('Please log in to add items to your cart');
+      navigate('/login');
+      return;
+    }
+    if (isAlreadyInCart) {
+      navigate('/cart');
+      return;
+    }
+    dispatch(addItemToCart(id));
   };
 
   if (status === "loading") {
@@ -183,10 +198,16 @@ export default function MockTestDetail() {
 
               {/* --- CTA Button --- */}
               <button
-                onClick={handleBuyNow}
-                className="w-full bg-blue-600 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 transform hover:scale-105"
+                onClick={handleAddToCart} // <-- Use new handler
+                className={`w-full text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 ${
+                  isAlreadyInCart
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
               >
-                {test.price > 0 ? "Buy Now" : "Start Test"}
+                {test.price > 0 
+                  ? (isAlreadyInCart ? 'Go to Cart' : 'Add to Cart') 
+                  : (isAlreadyInCart ? 'Go to Cart' : 'Start Test')}
               </button>
 
               {/* --- Features List --- */}

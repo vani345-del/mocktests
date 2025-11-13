@@ -20,7 +20,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
       minlength: 6,
-      select: false, // hide password by default
+      select: false,
     },
 
     role: {
@@ -33,23 +33,32 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
-  cart: [
+
+    // 🛒 Cart items
+    cart: [
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "MockTest", // Reference the MockTest model
+        ref: "MockTest",
       },
     ],
-    // 🔒 account management
+
+    // ⭐ Purchased tests (ADD THIS)
+    purchasedTests: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "MockTest",
+      },
+    ],
+
     isVerified: {
       type: Boolean,
       default: false,
     },
+
     isActive: {
       type: Boolean,
       default: true,
     },
-
-    // 📅 Timestamps for audit
   },
   { timestamps: true }
 );

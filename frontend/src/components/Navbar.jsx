@@ -1,4 +1,4 @@
-import React, { useState ,useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import { IoMdPerson } from "react-icons/io";
 import { GiHamburgerMenu, GiSplitCross } from "react-icons/gi";
 import { Link, useNavigate } from "react-router-dom";
@@ -13,12 +13,16 @@ function Navbar() {
   const [showHam, setShowHam] = useState(false);
   const [showPro, setShowPro] = useState(false);
   const [loading, setLoading] = useState(false);
+
   const navigate = useNavigate();
   const dispatch = useDispatch();
-  const { userData } = useSelector((state) => state.user);
-  const { items: cartItems } = useSelector((state) => state.cart);
-  const serverUrl = import.meta.env.VITE_SERVER_URL;
 
+  const { userData } = useSelector((state) => state.user);
+
+  // 🔥 FIXED — correct field from cartSlice
+  const cartItems = useSelector((state) => state.cart.cartItems || []);
+
+  const serverUrl = import.meta.env.VITE_SERVER_URL;
 
   useEffect(() => {
     if (userData) {
@@ -42,11 +46,12 @@ function Navbar() {
 
   return (
     <>
-      {/* ✅ Top Navigation Bar */}
+      {/* TOP NAVBAR */}
       <header className="bg-white/90 backdrop-blur-sm shadow-sm fixed top-0 left-0 w-full z-50">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* ✅ Logo */}
+
+            {/* LOGO */}
             <div
               className="flex-shrink-0 text-2xl font-bold text-blue-600 cursor-pointer"
               onClick={() => navigate("/")}
@@ -54,37 +59,32 @@ function Navbar() {
               TestPrep
             </div>
 
-            {/* ✅ Desktop Menu */}
+            {/* DESKTOP MENU */}
             <div className="hidden md:flex items-center space-x-8">
-              <a href="#categories" className="font-medium text-gray-600 hover:text-blue-600">
-                Categories
-              </a>
-              <a href="/mocktests" className="font-medium text-gray-600 hover:text-blue-600">
-                Mock Tests
-              </a>
-              <a href="#grand-tests" className="font-medium text-gray-600 hover:text-blue-600">
-                Grand Tests
-              </a>
-              <a href="#testimonials" className="font-medium text-gray-600 hover:text-blue-600">
-                Testimonials
-              </a>
+              <a href="#categories" className="font-medium text-gray-600 hover:text-blue-600">Categories</a>
+              <a href="/mocktests" className="font-medium text-gray-600 hover:text-blue-600">Mock Tests</a>
+              <a href="#grand-tests" className="font-medium text-gray-600 hover:text-blue-600">Grand Tests</a>
+              <a href="#testimonials" className="font-medium text-gray-600 hover:text-blue-600">Testimonials</a>
             </div>
 
-            {/* ✅ Right Side: Auth Buttons */}
+            {/* RIGHT SIDE */}
             <div className="hidden md:flex items-center space-x-4 relative">
-              {/* Profile icon */}
 
+              {/* CART ICON (only when logged in) */}
               {userData && (
                 <Link to="/cart" className="relative text-gray-600 hover:text-blue-600 p-2">
                   <FaShoppingCart className="w-6 h-6" />
-                  {cartItems.length > 0 && (
+
+                  {/* FIXED SAFE LENGTH CHECK */}
+                  {cartItems?.length > 0 && (
                     <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                      {cartItems.length}
+                      {cartItems?.length || 0}
                     </span>
                   )}
                 </Link>
               )}
-              
+
+              {/* PROFILE */}
               {!userData ? (
                 <IoMdPerson
                   className="w-[45px] h-[45px] p-2 bg-black text-white rounded-full cursor-pointer border-2 border-white"
@@ -107,7 +107,7 @@ function Navbar() {
                 </div>
               )}
 
-              {/* Login / Logout */}
+              {/* LOGIN / LOGOUT BUTTON */}
               {!userData ? (
                 <button
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-full hover:bg-blue-700"
@@ -125,8 +125,8 @@ function Navbar() {
                 </button>
               )}
 
-              {/* Profile Dropdown */}
-              {showPro && (
+              {/* PROFILE DROPDOWN */}
+              {showPro && userData && (
                 <div className="absolute top-14 right-0 w-40 bg-white border border-gray-200 rounded-lg shadow-md p-2 flex flex-col">
                   <span
                     className="px-3 py-2 text-gray-800 hover:bg-blue-50 rounded cursor-pointer"
@@ -137,6 +137,7 @@ function Navbar() {
                   >
                     My Profile
                   </span>
+
                   <span
                     className="px-3 py-2 text-gray-800 hover:bg-blue-50 rounded cursor-pointer"
                     onClick={() => {
@@ -150,7 +151,7 @@ function Navbar() {
               )}
             </div>
 
-            {/* ✅ Mobile Menu Button */}
+            {/* MOBILE MENU BUTTON */}
             <div className="md:hidden flex items-center">
               <GiHamburgerMenu
                 className="w-7 h-7 text-gray-800 cursor-pointer"
@@ -161,7 +162,7 @@ function Navbar() {
         </nav>
       </header>
 
-      {/* ✅ Mobile Menu Overlay */}
+      {/* MOBILE MENU */}
       <div
         className={`fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center transition-transform duration-500 ${
           showHam ? "translate-x-0" : "-translate-x-full"
@@ -172,7 +173,7 @@ function Navbar() {
           onClick={() => setShowHam(false)}
         />
 
-        {/* Profile Circle */}
+        {/* PROFILE CIRCLE */}
         {!userData ? (
           <IoMdPerson className="w-[60px] h-[60px] p-2 bg-black text-white rounded-full border-2 border-white mb-6" />
         ) : (
@@ -195,7 +196,7 @@ function Navbar() {
           </div>
         )}
 
-        {/* Mobile Links */}
+        {/* MOBILE LINKS */}
         <a
           href="#categories"
           className="text-white text-lg mb-3 hover:text-blue-400"
@@ -225,7 +226,7 @@ function Navbar() {
           Testimonials
         </a>
 
-        {/* Login / Logout buttons (mobile) */}
+        {/* LOGIN / LOGOUT BUTTONS */}
         {!userData ? (
           <button
             className="px-8 py-3 text-white bg-blue-600 rounded-full hover:bg-blue-700"

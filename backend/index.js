@@ -14,11 +14,13 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import adminRoute from "./routes/adminRoute.js";
 import publicMocktestRoutes from './routes/publicMocktestRoutes.js';
 import cartRoute from "./routes/cartRoute.js";
+import paymentRoute from "./routes/paymentRoute.js"; 
 
 
 dotenv.config();
 const app = express();
 const port = process.env.PORT ;
+
 
 // ✅ Middleware setup
 app.use(
@@ -45,6 +47,8 @@ app.use("/api/student", studentRoute);
 app.use('/api/public/categories', categoryRoutes);
 app.use('/api/admin/categories', adminRoute);
 app.use("/api/public/mocktests", publicMocktestRoutes);
+
+app.use('/api/payment', paymentRoute);
 
 
 

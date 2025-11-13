@@ -23,6 +23,7 @@ import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
+import { Toaster } from 'react-hot-toast';
 
 // Layout for public routes
 const MainLayout = ({ children }) => {
@@ -36,6 +37,7 @@ const MainLayout = ({ children }) => {
 
   return (
     <>
+    <Toaster position="top-center" reverseOrder={false} />
       {!hideLayout && <Navbar />}
       <main className="min-h-[80vh]">{children}</main>
       {!hideLayout && <Footer />}

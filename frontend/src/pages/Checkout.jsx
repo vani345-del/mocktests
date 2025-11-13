@@ -1,117 +1,161 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'react-toastify';
+import api from '../api/axios';
+import toast from 'react-hot-toast';
+import { clearCart } from '../redux/cartSlice';
 
-export default function Checkout() {
-  const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const { items: cartItems, status: cartStatus } = useSelector((state) => state.cart);
-  const { userData } = useSelector((state) => state.user);
+const Checkout = () => {
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
 
-  // Redirect if cart is empty or user is not logged in
-  useEffect(() => {
-    if (!userData) {
-      navigate('/login');
-    } else if (userData && cartItems.length === 0 && cartStatus === 'succeeded') {
-      toast.info('Your cart is empty.');
-      navigate('/cart');
-    }
-  }, [cartItems, userData, cartStatus, navigate]);
+    // SAFER selectors (prevents undefined errors)
+    const cartItems = useSelector((state) => state.cart.cartItems || []);
+    const totalAmount = useSelector((state) => state.cart.totalAmount || 0);
+    const { user } = useSelector((state) => state.user);
 
-  const calculateSubtotal = () => {
-    return cartItems.reduce((acc, item) => {
-      const price = item.discountPrice > 0 ? item.discountPrice : item.price;
-      return acc + price;
-    }, 0);
-  };
-  const subtotal = calculateSubtotal();
-
-  const handlePlaceOrder = (e) => {
-    e.preventDefault();
-    // --- THIS IS WHERE YOU WOULD CALL THE BACKEND ORDER API ---
-    // For now, we just simulate success.
-    console.log('Placing order with:', {
-      user: userData._id,
-      items: cartItems.map(item => item._id),
-      totalAmount: subtotal
-    });
+    // Load Razorpay script
+    const loadRazorpayScript = (src) => {
+        return new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = src;
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+    };
     
-    // In a real app: dispatch(createOrder(orderData));
-    
-    toast.success('Order placed successfully! (Simulation)');
-    // dispatch(clearCart()); // You'd clear the cart from Redux
-    navigate('/'); // Redirect to home or a "success" page
-  };
 
-  return (
-    <div className="bg-slate-50 min-h-screen pt-28 pb-16">
-      <div className="max-w-4xl mx-auto px-4">
-        <h1 className="text-4xl font-bold text-gray-900 mb-8 text-center">Checkout</h1>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
-          {/* Billing Details Form */}
-          <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-            <h2 className="text-2xl font-semibold mb-6">Billing Details</h2>
-            <form onSubmit={handlePlaceOrder} className="space-y-4">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
-                <input
-                  type="text"
-                  id="name"
-                  value={userData?.name || ''}
-                  readOnly
-                  className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md shadow-sm"
-                />
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email Address</label>
-                <input
-                  type="email"
-                  id="email"
-                  value={userData?.email || ''}
-                  readOnly
-                  className="mt-1 block w-full p-3 bg-gray-100 border border-gray-300 rounded-md shadow-sm"
-                />
-              </div>
-              
-              {/* Payment Gateway Placeholder */}
-              <div className="pt-4">
-                 <h3 className="text-lg font-medium text-gray-900">Payment Details</h3>
-                 <div className="mt-2 p-4 border border-blue-200 bg-blue-50 rounded-md text-blue-700 text-center">
-                    This is where a payment gateway like Stripe or Razorpay would be integrated.
-                 </div>
-              </div>
 
-              <button
-                type="submit"
-                className="w-full mt-6 bg-blue-600 text-white text-lg font-semibold py-3 px-6 rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300"
-              >
-                {subtotal > 0 ? `Pay ₹${subtotal.toFixed(2)}` : 'Complete Order'}
-              </button>
-            </form>
-          </div>
+    const handlePayment = async () => {
+        const toastId = toast.loading('Processing payment...');
 
-          {/* Order Summary */}
-          <div className="bg-white p-6 rounded-lg shadow-lg border border-gray-200 h-fit sticky top-28">
-            <h2 className="text-2xl font-semibold mb-6 border-b pb-4">Order Summary</h2>
-            <div className="space-y-3 max-h-64 overflow-y-auto">
-              {cartItems.map(item => (
-                <div key={item._id} className="flex justify-between items-center text-gray-700">
-                  <span className="w-3/4 truncate">{item.title}</span>
-                  <span className="font-medium">₹{item.discountPrice > 0 ? item.discountPrice : item.price}</span>
-                </div>
-              ))}
+        const res = await loadRazorpayScript('https://checkout.razorpay.com/v1/checkout.js');
+        if (!res) {
+            toast.error('Razorpay SDK failed to load. Check your connection.', { id: toastId });
+            return;
+        }
+
+        try {
+            // TEST payment: ₹1
+            const testAmount = 1;
+
+            // Create razorpay order from backend
+            const { data: order } = await api.post('/api/payment/create-order', {
+                amount: testAmount,
+                cartItems: cartItems
+            });
+
+            if (!order) {
+                toast.error('Server error. Could not create order.', { id: toastId });
+                return;
+            }
+
+            // Razorpay modal options
+            const options = {
+                key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+                
+                amount: order.amount,
+                currency: 'INR',
+                name: 'Mocktests Pro',
+                description: 'Mock Test Purchase',
+                image: '/logo.png',
+                order_id: order.id,
+
+                handler: async function (response) {
+                    try {
+                        const { data } = await api.post('/api/payment/verify-payment', {
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_signature: response.razorpay_signature,
+                            cartItems: cartItems.map(item => item._id),
+                            amount: testAmount
+                        });
+
+
+
+
+                        if (data.success) {
+                            toast.success('Thank you! Payment Successful.', { id: toastId });
+
+                            dispatch(clearCart());
+
+                            navigate('/student-dashboard');
+                        } else {
+                            toast.error('Payment verification failed.', { id: toastId });
+                        }
+                    } catch (err) {
+                        console.error('Verification API error:', err);
+                        toast.error('Payment verification failed.', { id: toastId });
+                    }
+                },
+
+                prefill: {
+                    name: user?.name || "Student",
+                    email: user?.email || "student@example.com",
+                },
+
+                notes: {
+                    address: 'Vani Institute',
+                },
+
+                theme: {
+                    color: '#3399cc',
+                },
+            };
+
+            toast.dismiss(toastId);
+
+            const paymentObject = new window.Razorpay(options);
+            paymentObject.open();
+
+            paymentObject.on('payment.failed', function () {
+                toast.error('Payment Failed. Please try again.');
+            });
+
+        } catch (error) {
+            console.error('Payment error:', error);
+            toast.error('An error occurred. Try again.', { id: toastId });
+        }
+    };
+
+    return (
+        <div className="container mx-auto p-4">
+            <h1 className="text-2xl font-bold mb-4">Checkout</h1>
+            <div className="bg-white p-6 rounded-lg shadow-md">
+                <h2 className="text-xl font-semibold mb-3">Order Summary</h2>
+
+                {/* SAFE CHECK – prevents crashing */}
+                {!cartItems || cartItems.length === 0 ? (
+                    <p>Your cart is empty.</p>
+                ) : (
+                    <div>
+                        {cartItems.map((item) => (
+                            <div key={item._id} className="flex justify-between items-center mb-2">
+                                <span>{item.title}</span>
+                                <span>₹{item.price}</span>
+                            </div>
+                        ))}
+
+                        <hr className="my-2" />
+
+                        <div className="flex justify-between font-bold text-lg">
+                            <span>Total (Test Amount)</span>
+                            <span>₹1.00</span>
+                        </div>
+
+                        <button
+                            onClick={handlePayment}
+                            className="mt-6 w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+                        >
+                            Pay ₹1.00 Now
+                        </button>
+                    </div>
+                )}
             </div>
-            <div className="flex justify-between text-xl font-bold text-gray-900 border-t pt-4 mt-4">
-              <span>Total</span>
-              <span>₹{subtotal.toFixed(2)}</span>
-            </div>
-          </div>
-
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
+
+export default Checkout;

@@ -5,7 +5,17 @@ import api from "../api/axios";
 /* -----------------------------
    ✅ ADMIN SIDE LOGIC
 ----------------------------- */
-
+export const fetchPublicTestById = createAsyncThunk(
+  "mocktest/fetchPublicTestById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`api/public/mocktests/${id}`);
+      return response.data; // Expects a single test object
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
 // create mocktest
 export const createMockTest = createAsyncThunk(
   "mocktest/create",
@@ -195,7 +205,20 @@ const slice = createSlice({
       .addCase(deleteMockTest.rejected, (s, a) => {
         s.loading = false;
         s.error = a.payload;
-      });
+      })
+       // --- New Handlers for Single Public Test ---
+      .addCase(fetchPublicTestById.pending, (state) => {
+        state.currentTestStatus = "loading";
+        state.currentTest = null; // Clear old test
+      })
+      .addCase(fetchPublicTestById.fulfilled, (state, action) => {
+        state.currentTestStatus = "succeeded";
+        state.currentTest = action.payload; // Payload is the single test
+      })
+      .addCase(fetchPublicTestById.rejected, (state, action) => {
+        state.currentTestStatus = "failed";
+        state.currentTestError = action.payload;
+      })
 
     /* ---------- PUBLIC (STUDENT SIDE) ---------- */
     builder

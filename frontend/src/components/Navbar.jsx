@@ -48,7 +48,7 @@ function Navbar() {
               <a href="#categories" className="font-medium text-gray-600 hover:text-blue-600">
                 Categories
               </a>
-              <a href="#mock-tests" className="font-medium text-gray-600 hover:text-blue-600">
+              <a href="/mocktests" className="font-medium text-gray-600 hover:text-blue-600">
                 Mock Tests
               </a>
               <a href="#grand-tests" className="font-medium text-gray-600 hover:text-blue-600">
@@ -181,7 +181,7 @@ function Navbar() {
           Categories
         </a>
         <a
-          href="#mock-tests"
+          href="/mocktests"
           className="text-white text-lg mb-3 hover:text-blue-400"
           onClick={() => setShowHam(false)}
         >

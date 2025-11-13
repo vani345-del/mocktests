@@ -15,6 +15,7 @@ export const getMocktestsByCategory = async (req, res) => {
     const { category } = req.query;
     console.log("getMocktestsByCategory called. query:", req.query);
 
+    // No category => return all tests
     if (!category) {
       const allTests = await MockTest.find().sort({ createdAt: -1 });
       return res.json(allTests);
@@ -22,10 +23,11 @@ export const getMocktestsByCategory = async (req, res) => {
 
     let filter = {};
 
-    // Check if ObjectId
+    // If category looks like a valid ObjectId -> use it directly
     if (mongoose.Types.ObjectId.isValid(category)) {
       filter.category = category;
     } else {
+      // Try to find by slug or name
       const catDoc = await Category.findOne({
         $or: [{ slug: category }, { name: category }],
       });
@@ -34,8 +36,10 @@ export const getMocktestsByCategory = async (req, res) => {
         console.log("Category found by slug/name:", catDoc._id);
         filter.category = catDoc._id;
       } else {
-        console.log("No category doc found — using raw string match.");
-        filter.category = category;
+        // IMPORTANT: if no Category doc found, use categorySlug (string match)
+        // Do NOT set filter.category = category (that causes CastError).
+        console.log("No category doc found — using categorySlug string match.");
+        filter.categorySlug = category;
       }
     }
 
@@ -47,6 +51,7 @@ export const getMocktestsByCategory = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 /* Create mocktest (Stage 1) */
 
 export const createMockTest = async (req, res) => {
@@ -314,33 +319,52 @@ export const getMockTests = async (req, res) => {
     const { q, category, limit = 50 } = req.query;
     const filter = {};
 
-    // Only public (student) route: return published tests
     filter.isPublished = true;
 
-    if (q) filter.$or = [
-      { title: new RegExp(q, 'i') },
-      { description: new RegExp(q, 'i') }
-    ];
-
-    if (category) {
-      // accept slug or id
-      const cat = await Category.findOne({ $or: [{ slug: category }, { _id: category }] });
-      if (cat) filter.category = cat._id;
-      else filter.categorySlug = category;
+    if (q) {
+      filter.$or = [
+        { title: new RegExp(q, "i") },
+        { description: new RegExp(q, "i") }
+      ];
     }
 
-    const mocktests = await MockTest.find(filter) .populate("category", "name slug") 
+    if (category) {
+
+      // 🟢 If category is ObjectId → use it
+      if (mongoose.Types.ObjectId.isValid(category)) {
+        filter.category = category;
+
+      } else {
+        // 🟢 Otherwise match by slug or name ONLY
+        const cat = await Category.findOne({
+          $or: [{ slug: category }, { name: category }],
+        });
+
+        if (cat) {
+          filter.category = cat._id;
+        } else {
+          // 🟢 FINAL fallback: use categorySlug = "ssc"
+          filter.categorySlug = category;
+        }
+      }
+    }
+
+    const mocktests = await MockTest.find(filter)
+      .populate("category", "name slug")
       .limit(Number(limit))
       .sort({ createdAt: -1 })
       .lean();
 
     const total = await MockTest.countDocuments(filter);
+
     return res.json({ mocktests, total });
+
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: 'Server error' });
+    console.error("getMockTests ERROR:", err);
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 export const getMockTestById = async (req, res) => {
   try {
     const mocktest = await MockTest.findById(req.params.id)

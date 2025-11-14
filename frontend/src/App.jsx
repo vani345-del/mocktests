@@ -16,7 +16,7 @@ import DashboardPage from "./components/admin/DashboardPage";
 import ManageInstructors from "./components/admin/ManageInstructors";
 import ManageStudents from "./components/admin/ManageStudents";
 import ManageMocktests from "./components/admin/ManageMocktests";
-import WriteMocktest from "./pages/WriteMocktest";
+import WriteMocktest from "./pages/student/WriteMocktest";
 import CategoryPage from "./components/admin/CategoryPage";
 import EditMocktestPage from "./components/admin/EditMocktestPage";
 import AdminQuestions from "./components/admin/AdminQuestions";
@@ -25,6 +25,7 @@ import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import { Toaster } from 'react-hot-toast';
+import InstructionsPage from "./pages/student/InstructionsPage";
 
 // Import the student dashboard
 import StuDashboard from "./pages/student/StuDashboard"; 
@@ -87,8 +88,19 @@ const App = () => {
               )
             }
           />
+          <Route 
+            path="/student/instructions/:mocktestId" 
+            element={
+              userData ? <InstructionsPage /> : <Navigate to="/login" replace />
+            }
+          />
 
-           <Route path="/student/test/:attemptId" element={<WriteMocktest />} />
+           <Route 
+            path="/student/test/:attemptId" 
+            element={
+              userData ? <WriteMocktest /> : <Navigate to="/login" replace />
+            } 
+          />
            <Route path="/mocktests" element={<AllMockTests />} />
            <Route path="/mocktests/:id" element={<MockTestDetail />} /> 
 

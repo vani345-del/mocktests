@@ -9,6 +9,7 @@ import {
   getMockTests,
 } from "../controllers/mockTestController.js";
 import { uploadSingle } from "../middleware/upload.js";
+import { isAuth } from "../middleware/isAuth.js";
 
 const router = express.Router();
 
@@ -23,7 +24,7 @@ router.get("/:id", getMockTestById);
 router.post("/:id/questions", addQuestion);
 
 // Bulk upload (file field name = 'file')
-router.post("/:id/questions/bulk", uploadSingle.single("file"), bulkUploadQuestions);
+router.post("/questions/bulk-upload", isAuth, uploadSingle.single("file"), bulkUploadQuestions);
 
 // Update status publish/unpublish
 router.put("/:id/status", updateStatus);

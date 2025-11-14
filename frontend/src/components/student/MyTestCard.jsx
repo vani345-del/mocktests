@@ -6,26 +6,11 @@ import toast from "react-hot-toast";
 const MyTestCard = ({ test }) => {
   const navigate = useNavigate();
 
-  const handleStartTest = async (mocktestId) => {
-    const toastId = toast.loading("Starting test...");
-
-    try {
-      const { data } = await api.post(`/api/student/start-test/${mocktestId}`);
-
-      if (!data.attemptId) {
-        toast.error("Unable to start test", { id: toastId });
-        return;
-      }
-
-      toast.success("Test started!", { id: toastId });
-      navigate(`/student/test/${data.attemptId}`);
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Error starting test", {
-        id: toastId,
-      });
-    }
+const handleStartTest = (mocktestId) => {
+    // Simply navigate to the new instructions page
+    navigate(`/student/instructions/${mocktestId}`);
   };
-
+  
   return (
     <div className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
 

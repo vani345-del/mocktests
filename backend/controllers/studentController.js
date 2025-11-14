@@ -25,82 +25,147 @@ export const getAvailableMocktests = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // 2️⃣ Start a Mocktest Attempt (AUTH REQUIRED)
-// -----------------------------------------------------------------------------
 export const startMocktest = async (req, res) => {
   try {
     const { mocktestId } = req.params;
-
-    // ⭐ Use real logged-in student ID (from isAuth middleware)
     const studentId = req.user.id;
 
     const mocktest = await MockTest.findById(mocktestId);
-    if (!mocktest)
+    if (!mocktest) {
       return res.status(404).json({ success: false, message: "Mocktest not found" });
+    }
 
+    // --- New Logic Starts Here ---
+    let questionsForAttempt = [];
+
+    // 1. Aggregate counts for each subject
+    const subjectMap = new Map();
+    for (const subject of mocktest.subjects) {
+      const { name, easy, medium, hard } = subject;
+      if (!subjectMap.has(name)) {
+        subjectMap.set(name, { easy: 0, medium: 0, hard: 0 });
+      }
+      const counts = subjectMap.get(name);
+      counts.easy += easy;
+      counts.medium += medium;
+      counts.hard += hard;
+    }
+
+    // Helper function to fetch questions
+    const fetchQuestions = async (subjectName, difficulty, count) => {
+      if (count === 0) return [];
+      // Your Question.js model uses 'category' for the subject name
+      return Question.aggregate([
+        { $match: { category: subjectName, difficulty: difficulty } },
+        { $sample: { size: count } }
+      ]);
+    };
+
+    // 2. Create an array of promises
+    const fetchPromises = [];
+    for (const [name, counts] of subjectMap.entries()) {
+      fetchPromises.push(fetchQuestions(name, "easy", counts.easy));
+      fetchPromises.push(fetchQuestions(name, "medium", counts.medium));
+      fetchPromises.push(fetchQuestions(name, "hard", counts.hard));
+    }
+
+    // 3. Run all fetches in parallel
+    const allQuestionArrays = await Promise.all(fetchPromises);
+    questionsForAttempt = allQuestionArrays.flat(); // Combine all results
+    // --- End of New Logic ---
+
+    if (questionsForAttempt.length === 0) {
+      return res.status(400).json({ success: false, message: "No questions found for this test configuration. Make sure you have uploaded questions to the global pool." });
+    }
+
+    // Shuffle the final array
+    questionsForAttempt.sort(() => Math.random() - 0.5);
+    
     const now = new Date();
+    const endsAt = new Date(now.getTime() + mocktest.durationMinutes * 60000);
 
-    if (now < mocktest.availableFrom || now > mocktest.availableTo)
-      return res.status(400).json({ success: false, message: "Test not available now" });
-
-    const totalQuestions = await Question.countDocuments();
-    if (totalQuestions === 0)
-      return res.status(400).json({ success: false, message: "No questions available" });
-
-    const sampleSize = totalQuestions >= 10 ? 10 : totalQuestions;
-
-    // Select random questions
-    const questions = await Question.aggregate([
-      { $sample: { size: sampleSize } }
-    ]);
-
-    // Create attempt
     const attempt = await Attempt.create({
       studentId,
       mocktestId,
-      questions,
+      questions: questionsForAttempt,
       startedAt: now,
-      endsAt: new Date(now.getTime() + mocktest.duration * 60000),
+      endsAt: endsAt,
       status: "in-progress"
     });
 
-    res.json({ success: true, attemptId: attempt._id, questions });
+    res.json({ 
+      success: true, 
+      attemptId: attempt._id, // This will now be a valid ID
+      endsAt: endsAt 
+    });
 
   } catch (err) {
     console.error("❌ Error in startMocktest:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // -----------------------------------------------------------------------------
 // 3️⃣ Submit Mocktest Answers
 // -----------------------------------------------------------------------------
 export const submitMocktest = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { answers } = req.body; // [{ questionId, selectedIndex }]
+    // ⭐ Ensure answers are in the format: [{ questionId, selectedAnswer }]
+    //    Your MockTest.js model had `correctAnswer` as a String,
+    //    but Question.js had `correct` as a [Number] index.
+    //    The code below assumes `Question.js` is the correct source,
+    //    and that `q.correct` is an array of correct *indices*.
+    //    This code assumes single-choice answers (q.correct[0]).
+    const { answers } = req.body; 
 
     const attempt = await Attempt.findById(attemptId);
     if (!attempt)
       return res.status(404).json({ success: false, message: "Attempt not found" });
 
-    let score = 0,
-      correctCount = 0;
+    if (attempt.status === "completed") {
+      return res.status(400).json({ success: false, message: "Test already submitted." });
+    }
+
+    let score = 0;
+    let correctCount = 0;
+    let processedAnswers = []; // To store the results
 
     attempt.questions.forEach((q) => {
+      // Find the user's answer for this question
       const userAnswer = answers.find((a) => a.questionId === q._id.toString());
+      
+      let isCorrect = false;
+      const selectedAnswer = userAnswer ? userAnswer.selectedAnswer : null; // `selectedAnswer` is the *string* of the chosen option
 
-      if (userAnswer && userAnswer.selectedIndex === q.correct[0]) {
+      // Find the index of the selected answer
+      const selectedIndex = q.options.indexOf(selectedAnswer);
+
+      if (userAnswer && q.correct.includes(selectedIndex)) {
         score += q.marks;
         correctCount++;
-      } else {
+        isCorrect = true;
+      } else if (userAnswer) {
+        // Apply negative marking only if an answer was given
         score -= q.negative;
       }
+
+      processedAnswers.push({
+        questionId: q._id.toString(),
+        selectedAnswer: selectedAnswer,
+        correctAnswer: q.options[q.correct[0]], // Assuming single correct answer
+        isCorrect: isCorrect,
+        marks: q.marks,
+        negativeMarks: q.negative,
+        questionText: q.title,
+        options: q.options
+      });
     });
 
     attempt.score = score;
     attempt.correctCount = correctCount;
     attempt.status = "completed";
     attempt.submittedAt = new Date();
+    attempt.answers = processedAnswers; // Store the processed answers
 
     await attempt.save();
 
@@ -108,14 +173,14 @@ export const submitMocktest = async (req, res) => {
       success: true,
       score,
       correctCount,
-      total: attempt.questions.length
+      total: attempt.questions.length,
+      attemptId: attempt._id
     });
   } catch (err) {
     console.error("❌ Error in submitMocktest:", err);
     res.status(500).json({ success: false, message: err.message });
   }
 };
-
 // -----------------------------------------------------------------------------
 // 4️⃣ Get My Purchased Mocktests
 // -----------------------------------------------------------------------------
@@ -127,7 +192,7 @@ export const getMyPurchasedTests = async (req, res) => {
       .populate({
         path: "purchasedTests",
         model: "MockTest",
-        select: "title description durationMinutes totalQuestions categorySlug"
+        select: "title description durationMinutes totalQuestions categorySlug subjects"
       })
       .select("purchasedTests");
 
@@ -141,3 +206,65 @@ export const getMyPurchasedTests = async (req, res) => {
     res.status(500).json({ message: "Server error. Could not fetch tests." });
   }
 };
+
+// ... other controllers
+
+// -----------------------------------------------------------------------------
+// 5️⃣ Get a Specific Attempt (AUTH REQUIRED)
+// -----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// 5️⃣ Get a Specific Attempt (AUTH REQUIRED)
+// -----------------------------------------------------------------------------
+export const getAttemptById = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+    const studentId = req.user.id; 
+
+    if (!mongoose.Types.ObjectId.isValid(attemptId)) {
+      return res.status(400).json({ success: false, message: "Invalid attempt ID" });
+    }
+
+    const attempt = await Attempt.findById(attemptId)
+                                .populate('mocktestId', 'title'); 
+
+    if (!attempt) {
+      return res.status(404).json({ success: false, message: "Attempt not found" });
+    }
+
+    if (attempt.studentId.toString() !== studentId) {
+      return res.status(403).json({ success: false, message: "Not authorized to view this attempt" });
+    }
+    
+    if (attempt.status === 'completed') {
+       return res.status(400).json({ 
+         success: false, 
+         message: "Test already completed.",
+         redirectTo: `/student/results/${attempt._id}` 
+       });
+    }
+    
+    // Don't send correct answers to the client
+    const questions = attempt.questions.map(q => {
+      // Create a copy of the question and remove the 'correct' field
+      const { correct, ...rest } = q; 
+      return rest;
+    });
+
+    res.json({
+      _id: attempt._id,
+      mocktestId: attempt.mocktestId,
+      endsAt: attempt.endsAt,
+      status: attempt.status,
+      questions: questions,
+      answers: (attempt.answers || []).map(a => ({ 
+        questionId: a.questionId, 
+        selectedAnswer: a.selectedAnswer 
+      }))
+    });
+
+  } catch (err) {
+    console.error("❌ Error in getAttemptById:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+

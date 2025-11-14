@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import MockTest from "../models/MockTest.js";
 import Category from "../models/Category.js";
+import Question from "../models/Question.js";
 
 import fs from "fs";
 import csv from "csv-parser";
@@ -135,38 +136,42 @@ export const addQuestion = async (req, res) => {
   }
 };
 
+
+
+// ... (keep all your other functions like getMocktestsByCategory, createMockTest, etc.) ...
+
+
+// ⭐ 2. REWRITTEN BULK UPLOAD FUNCTION
 export const bulkUploadQuestions = async (req, res) => {
   try {
     const filePath = req.file?.path;
     if (!filePath) throw new Error("No file uploaded");
 
-    const mocktest = await MockTest.findById(req.params.id);
-    if (!mocktest) return res.status(404).json({ message: "MockTest not found" });
+    let parsedRows = [];
 
-    let questions = [];
+    // Helper to convert "Option A", "Option B" etc. to an index
+    const answerToIndex = (answer) => {
+      const options = ["optiona", "optionb", "optionc", "optiond"];
+      // Normalize the answer from the CSV to match our keys
+      const cleanAnswer = (answer || "").replace(/\s+/g, "").toLowerCase();
+      
+      const index = options.indexOf(cleanAnswer);
+      
+      // Also check if the answer is "A", "B", "C", "D"
+      if (index === -1 && cleanAnswer.length === 1) {
+        return cleanAnswer.charCodeAt(0) - 'a'.charCodeAt(0);
+      }
+      
+      // Or if the answer from the CSV *is* the option text (e.g. "Option A")
+      // This is less reliable but a good fallback.
+      // We will handle this inside the row mapping.
+      return index;
+    };
 
     if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
       const workbook = XLSX.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
-      const data = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-      // ✅ Normalize header keys
-      questions = data.map((row) => {
-        const clean = {};
-        Object.keys(row).forEach((key) => {
-          clean[key.replace(/\s+/g, "").toLowerCase()] = row[key];
-        });
-
-        return {
-          subject: clean.subject,
-          level: clean.level?.toLowerCase() || "easy",
-          questionText: clean.question,
-          options: [clean.optiona, clean.optionb, clean.optionc, clean.optiond].filter(Boolean),
-          correctAnswer: clean.correctanswer,
-          marks: Number(clean.marks) || 1,
-          explanation: clean.explanation || "",
-        };
-      });
+      parsedRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
     } else if (filePath.endsWith(".csv")) {
       const csvData = [];
       await new Promise((resolve, reject) => {
@@ -176,45 +181,67 @@ export const bulkUploadQuestions = async (req, res) => {
           .on("end", resolve)
           .on("error", reject);
       });
+      parsedRows = csvData;
+    }
 
-      // ✅ Normalize CSV headers
-      questions = csvData.map((row) => {
-        const clean = {};
-        Object.keys(row).forEach((key) => {
-          clean[key.replace(/\s+/g, "").toLowerCase()] = row[key];
-        });
+    const validQuestions = [];
+    const errors = [];
 
-        return {
-          subject: clean.subject,
-          level: clean.level?.toLowerCase() || "easy",
-          questionText: clean.question,
-          options: [clean.optiona, clean.optionb, clean.optionc, clean.optiond].filter(Boolean),
-          correctAnswer: clean.correctanswer,
-          marks: Number(clean.marks) || 1,
-          explanation: clean.explanation || "",
-        };
+    for (const row of parsedRows) {
+      const clean = {};
+      Object.keys(row).forEach((key) => {
+        clean[key.replace(/\s+/g, "").toLowerCase()] = row[key];
+      });
+
+      const options = [
+        clean.optiona,
+        clean.optionb,
+        clean.optionc,
+        clean.optiond,
+      ].filter(Boolean);
+      
+      if (!clean.question || !clean.subject || !clean.level || !clean.correctanswer || options.length < 2) {
+        errors.push({ row: row, error: "Missing required fields (Question, Subject, Level, CorrectAnswer, or Options)" });
+        continue;
+      }
+      
+      // Find the index of the correct answer
+      const correctIndex = options.findIndex(opt => opt === clean.correctanswer);
+
+      if (correctIndex === -1) {
+         errors.push({ row: row, error: `CorrectAnswer "${clean.correctanswer}" did not match any of the Option texts.` });
+         continue;
+      }
+      
+      validQuestions.push({
+        title: clean.question,
+        options: options,
+        correct: [correctIndex], // Save the index, not the text
+        marks: Number(clean.marks) || 1,
+        negative: Number(clean.negative) || 0, // Add this if you have a 'Negative' column
+        difficulty: clean.level.toLowerCase(),
+        category: clean.subject, // 'category' on Question model maps to 'Subject' in CSV
+        tags: [],
       });
     }
 
-    // ✅ Filter valid rows only
-    const validQuestions = questions.filter(
-      (q) => q.subject && q.questionText && q.correctAnswer
-    );
-
     if (!validQuestions.length) {
       fs.unlinkSync(filePath);
-      console.log("Parsed data (first row):", questions[0]);
-      return res.status(400).json({ message: "No valid questions found in file" });
+      return res.status(400).json({ 
+        message: "No valid questions found in file.", 
+        errors: errors,
+        firstParsedRow: parsedRows[0] 
+      });
     }
 
-    mocktest.questions.push(...validQuestions);
-    await mocktest.save();
+    // Insert new questions into the global Question collection
+    await Question.insertMany(validQuestions);
 
     fs.unlinkSync(filePath);
 
     res.status(201).json({
-      message: `${validQuestions.length} valid questions uploaded successfully.`,
-      mocktest,
+      message: `${validQuestions.length} valid questions uploaded successfully to the global pool.`,
+      errors: errors
     });
   } catch (err) {
     console.error("Error bulk upload:", err);

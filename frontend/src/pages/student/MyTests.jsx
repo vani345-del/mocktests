@@ -1,47 +1,63 @@
-import React from 'react';
-import { Clock, HelpCircle } from 'lucide-react';
-import { mockMyTests } from '../mockData';
+import React, { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { fetchMyMockTests } from "../../redux/userSlice"; // Import the thunk
+import MockTestCard from "../../components/MockTestCard"; // Import your reusable card
+import { ClipLoader } from "react-spinners"; // Import a loading spinner
 
-// 2. My Tests Tab
-const MyTests = () => (
-  <div>
-    <h2 className="text-2xl font-semibold text-gray-800 mb-6">My Mocktests</h2>
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {mockMyTests.map(test => (
-        <div
-          key={test._id}
-          className="bg-white rounded-lg shadow-lg overflow-hidden transition-transform transform hover:-translate-y-1"
-        >
-          <img
-            src={test.imageUrl || `https://via.placeholder.com/400x200?text=${test.category}`}
-            alt={test.title}
-            className="h-48 w-full object-cover"
-          />
-          <div className="p-6">
-            <span className="inline-block bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full uppercase font-semibold tracking-wide">
-              {test.category}
-            </span>
-            <h3 className="mt-3 font-semibold text-xl text-gray-900 truncate">
-              {test.title}
-            </h3>
-            <div className="flex justify-between items-center text-gray-600 text-sm mt-3">
-              <span className="flex items-center">
-                <HelpCircle size={16} className="mr-1.5" />
-                {test.questions} Questions
-              </span>
-              <span className="flex items-center">
-                <Clock size={16} className="mr-1.5" />
-                {test.duration} Mins
-              </span>
-            </div>
-            <button className="mt-5 w-full bg-blue-600 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-              Start Test
-            </button>
-          </div>
+const MyTests = () => {
+  const dispatch = useDispatch();
+  const { myMockTests, myMockTestsStatus, myMockTestsError } = useSelector(
+    (state) => state.user
+  );
+
+  useEffect(() => {
+    // Fetch tests only if they haven't been fetched yet
+    if (myMockTestsStatus === "idle") {
+      dispatch(fetchMyMockTests());
+    }
+  }, [myMockTestsStatus, dispatch]);
+
+  let content;
+
+  if (myMockTestsStatus === "loading") {
+    content = (
+      <div className="flex justify-center items-center h-64">
+        <ClipLoader size={50} color={"#123abc"} />
+      </div>
+    );
+  } else if (myMockTestsStatus === "succeeded") {
+    if (myMockTests.length === 0) {
+      content = (
+        <div className="flex justify-center items-center h-64">
+          <p className="text-gray-500 text-lg">
+            You have not purchased any mock tests yet.
+          </p>
         </div>
-      ))}
+      );
+    } else {
+      content = (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {myMockTests.map((test) => (
+            // Use the reusable card with the "my-test" variant
+            <MockTestCard key={test._id} test={test} variant="my-test" />
+          ))}
+        </div>
+      );
+    }
+  } else if (myMockTestsStatus === "failed") {
+    content = (
+      <div className="flex justify-center items-center h-64">
+        <p className="text-red-500 text-lg">{myMockTestsError}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto p-6">
+      <h1 className="text-3xl font-bold mb-6 text-gray-800">My Mock Tests</h1>
+      {content}
     </div>
-  </div>
-);
+  );
+};
 
 export default MyTests;

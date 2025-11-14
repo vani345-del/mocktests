@@ -3,7 +3,9 @@ import {
   getAvailableMocktests,
   startMocktest,
   submitMocktest,
+  getMyPurchasedTests
 } from "../controllers/studentController.js";
+import { isAuth } from "../middleware/isAuth.js";
 
 const studentRouter = express.Router();
 
@@ -15,5 +17,6 @@ studentRouter.post("/start-test/:mocktestId", startMocktest);
 
 // 📝 Submit a completed mocktest
 studentRouter.post("/submit-test/:attemptId", submitMocktest);
+studentRouter.get("/my-tests", isAuth, getMyPurchasedTests);
 
 export default studentRouter;

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api/axios';
 import toast from 'react-hot-toast';
 import { clearCart } from '../redux/cartSlice';
+import { setUserData } from '../redux/userSlice';
 
 const Checkout = () => {
     const dispatch = useDispatch();
@@ -78,7 +79,7 @@ const Checkout = () => {
 
                         if (data.success) {
                             toast.success('Thank you! Payment Successful.', { id: toastId });
-
+                             dispatch(setUserData(data.user));
                             dispatch(clearCart());
 
                             navigate('/student-dashboard');

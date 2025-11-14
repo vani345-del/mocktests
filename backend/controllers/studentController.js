@@ -2,6 +2,7 @@ import MockTest from "../models/MockTest.js";
 import Attempt from "../models/Attempt.js";
 import Question from "../models/Question.js";
  import mongoose from "mongoose";
+ import Usermodel from "../models/Usermodel.js";
 
 
 // ✅ 1️⃣ Get available mocktests (for students)
@@ -97,5 +98,33 @@ export const submitMocktest = async (req, res) => {
   } catch (err) {
     console.error("❌ Error in submitMocktest:", err);
     res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+export const getMyPurchasedTests = async (req, res) => {
+  try {
+    const userId = req.user.id; // From isAuth middleware
+
+    // Find the user and populate the 'purchasedTests' field.
+    // We select only the 'purchasedTests' and 'name' fields.
+    const user = await Usermodel.findById(userId)
+      .populate({
+        path: "purchasedTests",
+        model: "MockTest", // Explicitly tell mongoose which model to use
+        // Optionally, select only the fields you need for the card
+        select: "title description durationMinutes totalQuestions categorySlug", 
+      })
+      .select("purchasedTests name"); 
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Send back just the array of populated tests
+    res.status(200).json(user.purchasedTests);
+
+  } catch (error) {
+    console.error("Error fetching purchased tests:", error);
+    res.status(500).json({ message: "Server error. Could not fetch tests." });
   }
 };

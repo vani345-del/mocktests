@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import React from "react";
 import { ToastContainer } from "react-toastify";
 import ScrollToTop from "./components/ScrollToTop";
@@ -24,6 +25,9 @@ import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import { Toaster } from 'react-hot-toast';
+
+// Import the student dashboard
+import StuDashboard from "./components/student/StuDashboard"; 
 
 // Layout for public routes
 const MainLayout = ({ children }) => {
@@ -61,23 +65,62 @@ const App = () => {
             path="/signup"
             element={!userData ? <Signup /> : <Navigate to="/" replace />}
           />
+
+          {/* --- 1. UPDATED LOGIN ROUTE --- */}
           <Route
             path="/login"
-            element={!userData ? (<Login />) : userData.role === "admin" ? (<Navigate to="/admin" replace />) 
-              : (<Navigate to="/student" replace />)
+            element={
+              !userData ? (
+                <Login />
+              ) : userData.role === "admin" ? (
+                <Navigate to="/admin" replace />
+              ) : (
+                // [ --- NEW LOGIC HERE --- ]
+                // Check if student has purchased tests.
+                // If yes (length > 0), go to dashboard.
+                // If no (length === 0), go to the public mocktests list.
+                userData.purchasedTests && userData.purchasedTests.length > 0 ? (
+                  <Navigate to="/student-dashboard" replace />
+                ) : (
+                  <Navigate to="/mocktests" replace />
+                )
+              )
             }
           />
+
            <Route path="/student/test/:attemptId" element={<WriteMocktest />} />
            <Route path="/mocktests" element={<AllMockTests />} />
-              <Route path="/mocktests/:id" element={<MockTestDetail />} /> 
+           <Route path="/mocktests/:id" element={<MockTestDetail />} /> 
 
-              {/* --- ADD THESE CART & CHECKOUT ROUTES --- */}
+          {/* --- Cart & Checkout Routes (No change needed here) --- */}
           <Route path="/cart" element={<Cart />} />
           <Route 
             path="/checkout" 
             element={
               userData ? <Checkout /> : <Navigate to="/login" replace />
             } 
+          />
+
+          {/* --- 2. UPDATED STUDENT DASHBOARD ROUTE --- */}
+          <Route
+            path="/student-dashboard"
+            element={
+              // First, check if user is a logged-in student
+              userData && userData.role === 'student' ? (
+                // [ --- NEW LOGIC HERE --- ]
+                // If they are a student, check if they have purchased tests.
+                // If yes, show the dashboard.
+                userData.purchasedTests && userData.purchasedTests.length > 0 ? (
+                  <StuDashboard />
+                ) : (
+                  // If no, redirect them to the mocktests list.
+                  <Navigate to="/mocktests" replace />
+                )
+              ) : (
+                // If not a logged-in student, send to login
+                <Navigate to="/login" replace />
+              )
+            }
           />
 
           {/* ✅ Admin layout (Sidebar + nested pages) */}
@@ -95,10 +138,9 @@ const App = () => {
             <Route path="instructors" element={<ManageInstructors />} />
             <Route path="students" element={<ManageStudents />} />
              <Route path="/admin/mocktests" element={<ManageMocktests />} />
-  <Route path="/admin/mocktests/:category" element={<CategoryPage />} />
-  <Route path="/admin/mocktests/:category/edit/:id" element={<EditMocktestPage />} />
-  <Route path="/admin/mocktests/:id/questions" element={<AdminQuestions />} />
-
+            <Route path="/admin/mocktests/:category" element={<CategoryPage />} />
+            <Route path="/admin/mocktests/:category/edit/:id" element={<EditMocktestPage />} />
+            <Route path="/admin/mocktests/:id/questions" element={<AdminQuestions />} />
           </Route>
 
           {/* Fallback */}

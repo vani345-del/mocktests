@@ -43,7 +43,6 @@ export const createOrder = async (req, res) => {
 
 // -------------------------------------------------------------
 // VERIFY PAYMENT
-// -------------------------------------------------------------
 export const verifyPayment = async (req, res) => {
   const {
     razorpay_order_id,
@@ -103,12 +102,18 @@ export const verifyPayment = async (req, res) => {
     user.cart = [];
     await user.save();
 
-    // 6. Success
+    // 6. [ --- THIS IS THE FIX --- ]
+    // You MUST fetch the updated user from the database *after* saving it.
+    // This ensures you get the new 'purchasedTests' array.
+    const updatedUser = await Usermodel.findById(userId);
+
+    // 7. Success
     res.json({
       success: true,
       message: "Payment successful, Mock Tests added to your dashboard!",
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
+      user: updatedUser, // <-- Now this variable is defined
     });
   } catch (error) {
     console.error("Error verifying payment:", error);

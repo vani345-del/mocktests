@@ -53,7 +53,7 @@ export const startMocktest = async (req, res) => {
 
     // Helper function to fetch questions
     const fetchQuestions = async (subjectName, difficulty, count) => {
-      if (count === 0) return [];
+      if (count <= 0) return [];
       // Your Question.js model uses 'category' for the subject name
       return Question.aggregate([
         { $match: { category: subjectName, difficulty: difficulty } },

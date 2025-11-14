@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import api from "../../api/axios";
 import { useDispatch } from "react-redux";
 import { addQuestion, bulkUpload } from "../../redux/mockTestSlice";
+import toast from "react-hot-toast";
 
 export default function AdminQuestions() {
   const { id } = useParams();
@@ -62,13 +63,34 @@ export default function AdminQuestions() {
 
   const onBulkUpload = async (e) => {
     e.preventDefault();
-    if (!file) return alert("Select a CSV/XLSX file");
-    const result = await dispatch(bulkUpload({ id, file }));
-    if (bulkUpload.fulfilled.match(result)) {
-      const res = await api.get(`api/admin/mocktests/${id}`);
-      setMocktest(res.data);
-    } else {
-      alert("Bulk upload failed: " + JSON.stringify(result.payload));
+    if (!file) {
+      toast.error("Please select a file");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file); // 'file' is the name the middleware expects
+
+    const toastId = toast.loading("Uploading questions...");
+
+    try {
+      // ⭐ THIS IS THE CHANGED LINE
+      // We call the new global bulk upload route.
+      // Make sure your mocktestRoutes.js is mounted at "/api/admin/mocktests" in your server's index.js
+      const { data } = await api.post(
+        `/api/admin/mocktests/questions/bulk-upload`, // <-- 1. This is the new route
+        fd,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+
+      toast.success(data.message || "Bulk upload successful!", { id: toastId });
+      setFile(null);
+      // You might want to refresh your questions list here
+    } catch (err) {
+      console.error("Bulk upload failed:", err);
+      toast.error(
+        err.response?.data?.message || "Bulk upload failed",
+        { id: toastId }
+      );
     }
   };
 

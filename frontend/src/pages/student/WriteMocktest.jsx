@@ -151,7 +151,7 @@ const WriteMocktest = () => {
   const endsAt = attempt.endsAt; // Get expiry time
 
   return (
-    <div className="flex h-[calc(100vh-80px)]">
+    <div className="flex h-[calc(100vh-80px)] mt-10">
       {/* Subject Sidebar */}
       <div className="w-1/5 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
         <h2 className="text-lg font-semibold mb-4">Subjects</h2>

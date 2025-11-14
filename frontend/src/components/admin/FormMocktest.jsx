@@ -188,6 +188,7 @@ export default function FormMocktest() {
                   <InputMini
                     label="Easy"
                     type="number"
+                    min="0"
                     value={s.easy}
                     onChange={(e) =>
                       handleSubjectChange(i, "easy", e.target.value)
@@ -196,6 +197,7 @@ export default function FormMocktest() {
                   <InputMini
                     label="Medium"
                     type="number"
+                     min="0"
                     value={s.medium}
                     onChange={(e) =>
                       handleSubjectChange(i, "medium", e.target.value)
@@ -204,6 +206,7 @@ export default function FormMocktest() {
                   <InputMini
                     label="Hard"
                     type="number"
+                     min="0"
                     value={s.hard}
                     onChange={(e) =>
                       handleSubjectChange(i, "hard", e.target.value)

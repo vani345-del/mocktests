@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChartCard } from '../ui/DashboardUI';
+import { ChartCard } from "../../components/student/DashboardUIKIt";
 
 // 4. Order History Tab (Placeholder)
 const OrderHistory = () => (

@@ -1,8 +1,8 @@
 import React, { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { fetchMyMockTests } from "../../redux/userSlice"; // Import the thunk
-import MockTestCard from "../../components/MockTestCard"; // Import your reusable card
-import { ClipLoader } from "react-spinners"; // Import a loading spinner
+import { fetchMyMockTests } from "../../redux/userSlice";
+import MyTestCard from "../../components/student/MyTestCard";
+import { ClipLoader } from "react-spinners";
 
 const MyTests = () => {
   const dispatch = useDispatch();
@@ -11,7 +11,6 @@ const MyTests = () => {
   );
 
   useEffect(() => {
-    // Fetch tests only if they haven't been fetched yet
     if (myMockTestsStatus === "idle") {
       dispatch(fetchMyMockTests());
     }
@@ -38,8 +37,7 @@ const MyTests = () => {
       content = (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {myMockTests.map((test) => (
-            // Use the reusable card with the "my-test" variant
-            <MockTestCard key={test._id} test={test} variant="my-test" />
+            <MyTestCard key={test._id} test={test} />
           ))}
         </div>
       );

@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import api from "../api/axios";
 
 const serverUrl = import.meta.env.VITE_SERVER_URL;
 
@@ -8,8 +9,8 @@ export const fetchUserData = createAsyncThunk(
   "user/fetchUserData",
   async (userId, thunkAPI) => {
     try {
-      const response = await axios.get(
-        `${serverUrl}/api/user/${userId}`,
+      const response = await api.get(`/api/user/${userId}`,
+        
         { withCredentials: true }
       );
       return response.data;

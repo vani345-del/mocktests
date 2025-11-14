@@ -43,46 +43,46 @@ export const createOrder = async (req, res) => {
 
 // -------------------------------------------------------------
 // VERIFY PAYMENT
+// -------------------------------------------------------------
 export const verifyPayment = async (req, res) => {
-  const {
-    razorpay_order_id,
-    razorpay_payment_id,
-    razorpay_signature,
-    cartItems,
-    amount,
-  } = req.body;
-
-  const userId = req.user.id;
-
   try {
-    // 1. Verify the signature
-    const shasum = crypto.createHmac(
-      "sha256",
-      process.env.RAZORPAY_KEY_SECRET
-    );
-    shasum.update(`${razorpay_order_id}|${razorpay_payment_id}`);
-    const digest = shasum.digest("hex");
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+      cartItems,
+      amount,
+    } = req.body;
 
-    if (digest !== razorpay_signature) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Payment verification failed" });
+    const userId = req.user.id;
+
+    // 1️⃣ Verify signature
+    const hmac = crypto.createHmac("sha256", process.env.RAZORPAY_KEY_SECRET);
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const generatedSignature = hmac.digest("hex");
+
+    if (generatedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
     }
 
-    // 2. Get the user
+    // 2️⃣ Ensure user exists
     const user = await Usermodel.findById(userId);
     if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
-    // 3. Convert IDs
+    // 3️⃣ Convert IDs
     const mockTestObjectIds = cartItems.map(
       (id) => new mongoose.Types.ObjectId(id)
     );
 
-    // 4. Save order in DB
+    // 4️⃣ Create order record
     const newOrder = new Order({
       user: userId,
       items: mockTestObjectIds,
@@ -97,30 +97,30 @@ export const verifyPayment = async (req, res) => {
 
     await newOrder.save();
 
-    // 5. Update the user
-    user.purchasedTests.push(...mockTestObjectIds);
-    user.cart = [];
-    await user.save();
+    // 5️⃣ Add purchased mocktests to user (NO duplicates)
+    await Usermodel.findByIdAndUpdate(userId, {
+      $addToSet: { purchasedTests: { $each: mockTestObjectIds } },
+      $set: { cart: [] },
+    });
 
-    // 6. [ --- THIS IS THE FIX --- ]
-    // You MUST fetch the updated user from the database *after* saving it.
-    // This ensures you get the new 'purchasedTests' array.
-    const updatedUser = await Usermodel.findById(userId);
+    // 6️⃣ Fetch updated user
+    const updatedUser = await Usermodel.findById(userId).populate(
+      "purchasedTests"
+    );
 
-    // 7. Success
+    // 7️⃣ Success response
     res.json({
       success: true,
-      message: "Payment successful, Mock Tests added to your dashboard!",
+      message: "Payment successful & mock tests added",
       orderId: razorpay_order_id,
       paymentId: razorpay_payment_id,
-      user: updatedUser, // <-- Now this variable is defined
+      user: updatedUser,
     });
   } catch (error) {
     console.error("Error verifying payment:", error);
     res.status(500).json({
       success: false,
-      message:
-        "Internal Server Error. Payment succeeded but updating user failed. Contact support.",
+      message: "Internal Server Error during payment verification",
     });
   }
 };

@@ -1,54 +1,76 @@
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../../api/axios'; // Use your centralized API instance
-import toast from 'react-hot-toast';
+import React from "react";
+import { useNavigate } from "react-router-dom";
+import api from "../../api/axios";
+import toast from "react-hot-toast";
 
-// This card component displays one test and handles the "Start Test" logic
 const MyTestCard = ({ test }) => {
   const navigate = useNavigate();
 
-  // This logic is borrowed from your StudentMocktests.jsx
   const handleStartTest = async (mocktestId) => {
-    const toastId = toast.loading('Starting test...');
+    const toastId = toast.loading("Starting test...");
+
     try {
-      // 1. Call the backend to create an "attempt"
       const { data } = await api.post(`/api/student/start-test/${mocktestId}`);
 
       if (!data.attemptId) {
-        toast.error("Unable to start test — please try again", { id: toastId });
+        toast.error("Unable to start test", { id: toastId });
         return;
       }
 
-      // 2. On success, navigate to the test-taking page
-      toast.success("Test started! Good luck.", { id: toastId });
+      toast.success("Test started!", { id: toastId });
       navigate(`/student/test/${data.attemptId}`);
-
     } catch (err) {
-      toast.error(err.response?.data?.message || "Error starting test", { id: toastId });
+      toast.error(err.response?.data?.message || "Error starting test", {
+        id: toastId,
+      });
     }
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden transition-all hover:shadow-lg">
-      <div className="p-5">
-        <span className="text-xs font-semibold text-blue-600 uppercase">
-          {test.categorySlug || 'Mock Test'}
-        </span>
-        <h3 className="text-xl font-bold text-gray-800 mt-1 mb-2">{test.title}</h3>
-        <p className="text-gray-600 text-sm mb-4">
-          {test.description || 'No description available.'}
+    <div className="flex flex-col bg-white border border-gray-200 rounded-lg shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden">
+
+      {/* 🔵 Top Banner (Featured Style) */}
+      <div
+        className={`h-32 w-full flex flex-col justify-center items-center text-white text-center shadow-inner
+        ${test.type === "Grand" ? "bg-purple-600" : "bg-blue-600"}`}
+      >
+
+        {/* Category Name */}
+        <p className="text-sm font-semibold opacity-90 tracking-wide uppercase">
+          {test.category?.name || test.categorySlug || "Mock Test"}
         </p>
-        <div className="flex justify-between text-sm text-gray-700 mb-4">
+
+      </div>
+
+      {/* 📝 Content */}
+      <div className="p-5 flex flex-col flex-grow">
+
+        {/* Mock Test Name */}
+        <h3 className="text-xl font-bold text-gray-900 mt-1 mb-3 line-clamp-2">
+          {test.title}
+        </h3>
+
+        {/* Description */}
+        <p className="text-gray-600 text-sm mb-4 leading-relaxed line-clamp-3">
+          {test.description || "No description available."}
+        </p>
+
+        {/* 🧮 Test Details */}
+        <div className="flex justify-between text-sm text-gray-700 mb-4 bg-gray-50 px-3 py-2 rounded-lg shadow-sm">
           <span>
-            <strong>{test.totalQuestions || 0}</strong> Questions
+            <strong className="text-blue-600">{test.totalQuestions}</strong>{" "}
+            Questions
           </span>
           <span>
-            <strong>{test.durationMinutes || 0}</strong> Mins
+            <strong className="text-blue-600">{test.durationMinutes}</strong>{" "}
+            Minutes
           </span>
         </div>
+
+        {/* 🚀 Start Test Button */}
         <button
           onClick={() => handleStartTest(test._id)}
-          className="w-full bg-green-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-600 transition-colors"
+          className="mt-auto w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-full hover:bg-green-700 shadow-md hover:shadow-lg transition-all"
         >
           Start Test
         </button>

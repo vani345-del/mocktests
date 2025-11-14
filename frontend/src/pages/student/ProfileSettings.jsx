@@ -1,6 +1,6 @@
 import React from 'react';
-import { mockUser } from '../mockData';
-import { ChartCard } from '../ui/DashboardUI';
+import { mockUser } from "../../components/student/mockData";
+import { ChartCard } from "../../components/student/DashboardUIKIt";
 
 // 5. Profile Settings Tab (Placeholder)
 const ProfileSettings = () => (

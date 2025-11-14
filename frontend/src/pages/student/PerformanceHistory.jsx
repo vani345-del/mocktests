@@ -1,6 +1,6 @@
 import React from 'react';
-import { mockAttempts } from '../mockData';
-import { ChartCard, Th, Td } from '../ui/DashboardUI';
+import { mockAttempts } from "../../components/student/mockData";
+import { ChartCard, Th, Td } from "../../components/student/DashboardUIKIt";
 
 // 3. Performance History Tab
 const PerformanceHistory = () => (

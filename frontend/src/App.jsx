@@ -27,7 +27,7 @@ import Checkout from "./pages/Checkout";
 import { Toaster } from 'react-hot-toast';
 
 // Import the student dashboard
-import StuDashboard from "./components/student/StuDashboard"; 
+import StuDashboard from "./pages/student/StuDashboard"; 
 
 // Layout for public routes
 const MainLayout = ({ children }) => {

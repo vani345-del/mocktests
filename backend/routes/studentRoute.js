@@ -13,10 +13,12 @@ const studentRouter = express.Router();
 studentRouter.get("/mocktests", getAvailableMocktests);
 
 // 🚀 Start a selected mocktest
-studentRouter.post("/start-test/:mocktestId", startMocktest);
+studentRouter.post("/start-test/:mocktestId", isAuth, startMocktest);
+
 
 // 📝 Submit a completed mocktest
 studentRouter.post("/submit-test/:attemptId", submitMocktest);
-studentRouter.get("/my-tests", isAuth, getMyPurchasedTests);
+studentRouter.get("/my-mocktests", isAuth, getMyPurchasedTests);
+
 
 export default studentRouter;

@@ -24,8 +24,8 @@ import {
   categoryPerformanceData, 
   COLORS, 
   getAverageScore 
-} from '../mockData';
-import { StatCard, ChartCard } from '../ui/DashboardUI';
+} from "../../components/student/mockData"
+import { StatCard, ChartCard } from '../../components/student/DashboardUIKIt';
 
 // 1. Overview Tab
 const DashboardOverview = () => {

@@ -7,7 +7,7 @@ import {
   LogOut,
   DollarSign
 } from 'lucide-react';
-import SidebarLink from './ui/SidebarLink';
+import SidebarLink from './SidebarLink';
 
 const StuSidebar = ({ activeTab, setActiveTab }) => {
   // You can later get this logout function from Redux/Auth context

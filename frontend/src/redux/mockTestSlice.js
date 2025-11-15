@@ -1,4 +1,4 @@
-// src/redux/mockTestSlice.js
+// frontend/src/redux/mockTestSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../api/axios";
 
@@ -104,20 +104,20 @@ export const fetchPublicMockTests = createAsyncThunk(
   }
 );
 
-/* -----------------------------
-// fetch single mocktest details by id
-export const fetchMockTestById = createAsyncThunk(
-  "mocktest/fetchById",
-  async (id, { rejectWithValue }) => {
+// --- 👇 NEW LEADERBOARD THUNK ---
+export const fetchGrandTestLeaderboard = createAsyncThunk(
+  'mocktest/fetchGrandTestLeaderboard',
+  async (mockTestId, { rejectWithValue }) => {
     try {
-      const res = await api.get(`/mocktests/${id}`);
-      return res.data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data || { message: err.message });
+      const response = await api.get(`/api/student/grandtest-leaderboard/${mockTestId}`);
+      return { mockTestId, data: response.data }; // Pass both ID and data
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaderboard');
     }
   }
 );
------------------------------ */
+// --- 👆 END OF NEW THUNK ---
+
 
 /* -----------------------------
    🧠 SLICE DEFINITION
@@ -136,6 +136,13 @@ const slice = createSlice({
     total: 0,
     publicStatus: "idle", // idle | loading | succeeded | failed
     publicError: null,
+    
+    // --- 👇 NEW LEADERBOARD STATE ---
+    // We will store leaderboards in a map, keyed by mockTestId
+    leaderboards: {}, // { "testId1": [...], "testId2": [...] }
+    leaderboardStatus: "idle",
+    leaderboardError: null,
+    // --- 👆 END OF NEW STATE ---
   },
 
   reducers: {},
@@ -218,7 +225,7 @@ const slice = createSlice({
       .addCase(fetchPublicTestById.rejected, (state, action) => {
         state.currentTestStatus = "failed";
         state.currentTestError = action.payload;
-      })
+      });
 
     /* ---------- PUBLIC (STUDENT SIDE) ---------- */
     builder
@@ -228,10 +235,6 @@ const slice = createSlice({
       })
       .addCase(fetchPublicMockTests.fulfilled, (state, action) => {
         state.publicStatus = "succeeded";
-
-        // Support both shapes:
-        // 1) { mocktests: [...], total: N }  (preferred)
-        // 2) [...array...] (older shape) - defensive fallback
         if (action.payload && Array.isArray(action.payload.mocktests)) {
           state.publicMocktests = action.payload.mocktests;
           state.total = action.payload.total || 0;
@@ -239,7 +242,6 @@ const slice = createSlice({
           state.publicMocktests = action.payload;
           state.total = action.payload.length;
         } else {
-          // unexpected shape - attempt to salvage
           state.publicMocktests = action.payload?.mocktests || [];
           state.total = action.payload?.total || 0;
         }
@@ -247,8 +249,25 @@ const slice = createSlice({
       .addCase(fetchPublicMockTests.rejected, (state, action) => {
         state.publicStatus = "failed";
         state.publicError = action.payload;
-        // keep existing publicMocktests array as-is (do not clear) so UI can degrade gracefully
       });
+      
+    // --- 👇 NEW LEADERBOARD REDUCERS ---
+    builder
+      .addCase(fetchGrandTestLeaderboard.pending, (state) => {
+        state.leaderboardStatus = 'loading';
+        state.leaderboardError = null;
+      })
+      .addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
+        state.leaderboardStatus = 'succeeded';
+        // Save the leaderboard data against its test ID
+        state.leaderboards[action.payload.mockTestId] = action.payload.data;
+        state.leaderboardError = null;
+      })
+      .addCase(fetchGrandTestLeaderboard.rejected, (state, action) => {
+        state.leaderboardStatus = 'failed';
+        state.leaderboardError = action.payload;
+      });
+    // --- 👆 END OF NEW REDUCERS ---
   },
 });
 

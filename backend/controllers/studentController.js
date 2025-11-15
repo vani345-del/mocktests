@@ -3,6 +3,7 @@ import Attempt from "../models/Attempt.js";
 import Question from "../models/Question.js";
 import mongoose from "mongoose";
 import Usermodel from "../models/Usermodel.js";
+import Order from '../models/Order.js';
 
 // -----------------------------------------------------------------------------
 // 1️⃣ Get Available Mocktests
@@ -34,8 +35,50 @@ export const startMocktest = async (req, res) => {
     if (!mocktest) {
       return res.status(404).json({ success: false, message: "Mocktest not found" });
     }
+    
+    // --- 👇 2. ADDED ACCESS CONTROL LOGIC ---
+    // A. Check if user has purchased this test
+    const order = await Order.findOne({
+      user: studentId,
+      items: mocktestId, // Check if mocktestId is in the 'items' array
+      status: 'successful'
+    });
 
-    // --- New Logic Starts Here ---
+    // If it's a paid test (price > 0) AND it's NOT a Grand Test, check for purchase
+    // We assume Grand Tests are *always* paid, so we check for all paid tests
+    if (mocktest.price > 0 && !order) {
+      return res.status(403).json({ success: false, message: "You have not purchased this test. Please buy it first." });
+    }
+    
+    let examEndTime;
+    const now = new Date();
+    // B. Check if it's a Grand Test and if the time is correct
+    if (mocktest.isGrandTest) {
+      const startTime = new Date(mocktest.scheduledFor);
+      // Calculate end time (start time + duration)
+      const endTime = new Date(startTime.getTime() + mocktest.durationMinutes * 60000);
+
+      if (now < startTime) {
+        return res.status(403).json({
+          success: false,
+          message: `This Grand Test is not available yet. It starts at ${startTime.toLocaleString()}`
+        });
+      }
+
+      if (now > endTime) {
+        return res.status(403).json({ success: false, message: 'The time window for this Grand Test has closed.' });
+      }
+
+    }
+    else {
+      // For regular mock tests, the end time is relative to when they start
+      examEndTime = new Date(now.getTime() + mocktest.durationMinutes * 60000);
+    }
+    // --
+    // --- 👆 END OF ACCESS CONTROL LOGIC ---
+
+
+    // --- Your existing logic for fetching questions ---
     let questionsForAttempt = [];
 
     // 1. Aggregate counts for each subject
@@ -72,17 +115,17 @@ export const startMocktest = async (req, res) => {
     // 3. Run all fetches in parallel
     const allQuestionArrays = await Promise.all(fetchPromises);
     questionsForAttempt = allQuestionArrays.flat(); // Combine all results
-    // --- End of New Logic ---
+    // --- End of your existing logic ---
 
     if (questionsForAttempt.length === 0) {
       return res.status(400).json({ success: false, message: "No questions found for this test configuration. Make sure you have uploaded questions to the global pool." });
     }
 
     // Shuffle the final array
+    // Shuffle the final array
     questionsForAttempt.sort(() => Math.random() - 0.5);
     
-    const now = new Date();
-    const endsAt = new Date(now.getTime() + mocktest.durationMinutes * 60000);
+    const endsAt = mocktest.isGrandTest ? examEndTime : new Date(now.getTime() + mocktest.durationMinutes * 60000);
 
     const attempt = await Attempt.create({
       studentId,
@@ -92,10 +135,14 @@ export const startMocktest = async (req, res) => {
       endsAt: endsAt,
       status: "in-progress"
     });
+    // --- 3. ADD ATTEMPT TO USER MODEL ---
+    // This makes sure the "Tests Completed" count on the dashboard is accurate
+    await Usermodel.findByIdAndUpdate(studentId, { $push: { attempts: attempt._id } });
+    // --- 👆 END OF NEW LOGIC ---
 
     res.json({ 
       success: true, 
-      attemptId: attempt._id, // This will now be a valid ID
+      attemptId: attempt._id, 
       endsAt: endsAt 
     });
 
@@ -192,7 +239,9 @@ export const getMyPurchasedTests = async (req, res) => {
       .populate({
         path: "purchasedTests",
         model: "MockTest",
-        select: "title description durationMinutes totalQuestions categorySlug subjects"
+        // --- 👇 ADDED isGrandTest and scheduledFor ---
+        select: "title description durationMinutes totalQuestions categorySlug subjects isGrandTest scheduledFor"
+        // --- 👆 END OF CHANGE ---
       })
       .select("purchasedTests");
 
@@ -268,3 +317,45 @@ export const getAttemptById = async (req, res) => {
   }
 };
 
+
+export const getGrandTestLeaderboard = async (req, res) => {
+  try {
+    const { mockTestId } = req.params;
+
+    // 1. Find the test to confirm it's a Grand Test and get its info
+    const grandTest = await MockTest.findById(mockTestId);
+    if (!grandTest || !grandTest.isGrandTest) {
+      return res.status(404).json({ message: 'Grand Test not found.' });
+    }
+
+    // 2. Check if the test time is over before showing leaderboard
+    const now = new Date();
+    const startTime = new Date(grandTest.scheduledFor);
+    const endTime = new Date(startTime.getTime() + grandTest.durationMinutes * 60000);
+
+    if (now < endTime) {
+      return res.status(400).json({ message: 'Leaderboard will be available after the test is over.' });
+    }
+
+    // 3. Find top 3 attempts for this test
+    const leaderboard = await Attempt.find({ 
+        mocktestId: mockTestId, 
+        status: 'completed' 
+      })
+      .sort({ score: -1 }) // Sort by score descending
+      .limit(3) // Get top 3
+      .populate('studentId', 'name'); // Get student's name from User model
+
+    // 4. Format the result
+    const formattedLeaderboard = leaderboard.map((attempt, index) => ({
+      rank: index + 1,
+      name: attempt.studentId ? attempt.studentId.name : 'Unknown User',
+      score: attempt.score,
+    }));
+
+    res.status(200).json(formattedLeaderboard);
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ message: 'Server error while fetching leaderboard.' });
+  }
+};

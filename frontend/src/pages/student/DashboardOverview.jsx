@@ -1,4 +1,6 @@
+// frontend/src/pages/student/DashboardOverview.jsx
 import React from 'react';
+import { useSelector } from 'react-redux'; // --- 1. IMPORT useSelector ---
 import {
   BookOpen,
   CheckCircle,
@@ -17,45 +19,104 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import { 
-  mockMyTests, 
-  mockAttempts, 
-  scoreHistoryData, 
-  categoryPerformanceData, 
-  COLORS, 
-  getAverageScore 
-} from "../../components/student/mockData"
+  
+// --- 2. We can remove mockData imports ---
+// import { 
+//   mockMyTests, 
+//   mockAttempts, 
+//   scoreHistoryData, 
+//   categoryPerformanceData, 
+//   COLORS, 
+//   getAverageScore 
+// } from "../../components/student/mockData"
+
 import { StatCard, ChartCard } from '../../components/student/DashboardUIKIt';
+// --- 3. IMPORT NEW LEADERBOARD COMPONENT ---
+import GrandTestLeaderboard from '../../components/student/GrandTestLeaderboard';
+
+
+// --- Dummy data just for charts, as this logic is complex ---
+// You can replace this later by building real chart data from attempts
+const scoreHistoryData = [
+  { name: 'Test 1', score: 65 },
+  { name: 'Test 2', score: 75 },
+  { name: 'Test 3', score: 70 },
+  { name: 'Test 4', score: 80 },
+];
+const categoryPerformanceData = [
+  { name: 'Subject A', value: 400 },
+  { name: 'Subject B', value: 300 },
+];
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+// --- End of dummy chart data ---
+
 
 // 1. Overview Tab
 const DashboardOverview = () => {
-  const avgScore = getAverageScore();
+  
+  // --- 4. GET REAL DATA FROM REDUX ---
+  const { userData } = useSelector((state) => state.user);
+  
+  const myTests = userData?.purchasedTests || [];
+  const myAttempts = userData?.attempts || [];
+  
+  const avgScore = myAttempts.length > 0
+    ? (myAttempts.reduce((acc, attempt) => acc + (attempt.score || 0), 0) / myAttempts.length).toFixed(0)
+    : 0;
+    
+  const now = new Date().getTime();
+  
+  // Filter for Grand Tests that are over
+  const completedGrandTests = myTests.filter(test =>
+    test.isGrandTest && (new Date(test.scheduledFor).getTime() + test.durationMinutes * 60000) < now
+  );
+  // --- 👆 END OF REAL DATA LOGIC ---
 
   return (
     <div className="grid grid-cols-1 gap-8">
-      {/* Stats Cards */}
+      
+      {/* --- 5. LEADERBOARD SECTION --- */}
+      {completedGrandTests.length > 0 && (
+        <section>
+          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
+            Grand Test Leaderboards
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {completedGrandTests.map(test => (
+              <GrandTestLeaderboard 
+                key={test._id} 
+                mockTestId={test._id} 
+                title={test.title} 
+              />
+            ))}
+          </div>
+        </section>
+      )}
+      {/* --- 👆 END OF LEADERBOARD SECTION --- */}
+    
+      {/* Stats Cards - NOW USING REAL DATA */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           icon={<BookOpen className="text-blue-500" />}
           title="Tests Enrolled"
-          value={mockMyTests.length}
+          value={myTests.length} // Real data
           color="blue"
         />
         <StatCard
           icon={<CheckCircle className="text-green-500" />}
           title="Tests Completed"
-          value={mockAttempts.length}
+          value={myAttempts.length} // Real data
           color="green"
         />
         <StatCard
           icon={<TrendingUp className="text-indigo-500" />}
           title="Average Score"
-          value={avgScore}
+          value={avgScore} // Real data
           color="indigo"
         />
       </div>
       
-      {/* Charts Section */}
+      {/* Charts Section (Still using dummy data) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ChartCard title="Score Over Time">
           <ResponsiveContainer width="100%" height={300}>

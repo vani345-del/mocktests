@@ -1,26 +1,24 @@
 // src/components/MockTestCard.jsx
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaBook, FaShoppingCart } from 'react-icons/fa'; // Icon for subjects
+import { FaBook, FaShoppingCart, FaClock } from 'react-icons/fa'; // --- ADDED FaClock ---
 import { useDispatch, useSelector } from 'react-redux';
 import { addItemToCart } from '../redux/cartSlice';
-import toast from 'react-hot-toast'; // --- ADDED: Assuming you use react-hot-toast ---
+import toast from 'react-hot-toast';
 
-// --- MODIFIED: Added 'variant' prop, default to 'catalog' ---
 export default function MockTestCard({ test, variant = "catalog" }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  // --- MODIFIED: Renamed to 'userData' to match your slice ---
   const { userData } = useSelector((state) => state.user);
   const { items: cartItems } = useSelector((state) => state.cart);
 
   const imageUrl = test.imageUrl || null;
 
   const isAlreadyInCart = cartItems.some(item => item._id === test._id);
-  const isMyTest = variant === 'my-test'; // --- ADDED: Check for variant ---
+  const isMyTest = variant === 'my-test';
 
   const handleAddToCart = (e) => {
-    e.preventDefault(); // Prevent link navigation
+    e.preventDefault(); 
     if (!userData) {
       toast.error('Please log in to add items to your cart');
       navigate('/login');
@@ -30,21 +28,28 @@ export default function MockTestCard({ test, variant = "catalog" }) {
       navigate('/cart');
       return;
     }
-    // --- MODIFIED: Dispatch test object or just ID? Your slice will determine this.
-    // Assuming addItemToCart just needs the test object, like your original.
-    // If it just needs an ID, use dispatch(addItemToCart(test._id));
     dispatch(addItemToCart(test)); 
   };
 
-  // --- ADDED: Handler for the "Start Test" button ---
   const handleStartTest = (e) => {
-    e.preventDefault(); // Prevent outer link navigation
-    navigate(`/mocktest/write/${test._id}`);
+    e.preventDefault(); 
+    // --- MODIFIED: Navigate to instructions page first ---
+    // This is better practice, as the instructions page will handle API calls
+    navigate(`/mocktest/instructions/${test._id}`);
+    // --- END OF MODIFICATION ---
   };
-  // --------------------------------------------------
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden shadow-md bg-white transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col">
+    <div className="relative border border-gray-200 rounded-lg overflow-hidden shadow-md bg-white transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col">
+      
+      {/* --- 👇 NEW GRAND TEST BADGE --- */}
+      {test.isGrandTest && (
+        <div className="absolute top-3 right-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full z-10 shadow-lg">
+          GRAND TEST
+        </div>
+      )}
+      {/* --- 👆 END OF BADGE --- */}
+
       <Link to={`/mocktest/${test._id}`} className="flex flex-col flex-grow">
         {/* Image Placeholder */}
         <div className="w-full h-40 bg-slate-100 flex items-center justify-center text-slate-400">
@@ -66,13 +71,23 @@ export default function MockTestCard({ test, variant = "catalog" }) {
             {test.shortDescription || test.description?.slice(0, 100) + (test.description?.length > 100 ? '...' : '')}
           </p>
 
+          {/* --- 👇 NEW GRAND TEST SCHEDULE TIME --- */}
+          {test.isGrandTest && (
+            <div className="text-sm text-red-700 font-semibold mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+              <FaClock />
+              <span>Starts: {new Date(test.scheduledFor).toLocaleString()}</span>
+            </div>
+          )}
+          {/* --- 👆 END OF NEW TIME --- */}
+
+
           {/* Subjects (Metadata) */}
           <div className="text-xs text-slate-500 mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
             <FaBook className="text-slate-400" />
             <span>{test.subjects?.map(s => s.name).join(', ') || 'General'}</span>
           </div>
 
-          {/* --- MODIFIED FOOTER: Conditional Rendering based on variant --- */}
+          {/* Footer */}
           <div className="flex items-center justify-between mt-5">
             {isMyTest ? (
               // --- "My Test" Variant ---
@@ -84,7 +99,7 @@ export default function MockTestCard({ test, variant = "catalog" }) {
                 Start Test
               </button>
             ) : (
-              // --- "Catalog" Variant (Your existing code) ---
+              // --- "Catalog" Variant ---
               <>
                 {/* Price */}
                 <div>
@@ -100,7 +115,7 @@ export default function MockTestCard({ test, variant = "catalog" }) {
                   onClick={handleAddToCart}
                   className={`px-5 py-2 rounded-full text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2 ${
                     isAlreadyInCart
-                      ? 'bg-yellow-500 text-white hover:bg-yellow-600' // Changed to yellow for "Go to Cart"
+                      ? 'bg-yellow-500 text-white hover:bg-yellow-600'
                       : 'bg-blue-600 text-white hover:bg-blue-700'
                   }`}
                 >
@@ -110,7 +125,6 @@ export default function MockTestCard({ test, variant = "catalog" }) {
               </>
             )}
           </div>
-          {/* ------------------------------------------------------------- */}
         </div>
       </Link>
     </div>

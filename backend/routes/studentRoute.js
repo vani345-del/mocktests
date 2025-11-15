@@ -4,7 +4,8 @@ import {
   startMocktest,
   submitMocktest,
   getMyPurchasedTests,
-  getAttemptById
+  getAttemptById,
+  getGrandTestLeaderboard,
 } from "../controllers/studentController.js";
 import { isAuth } from "../middleware/isAuth.js";
 
@@ -21,6 +22,8 @@ studentRouter.post("/start-test/:mocktestId", isAuth, startMocktest);
 studentRouter.post("/submit-test/:attemptId", submitMocktest);
 studentRouter.get("/my-mocktests", isAuth, getMyPurchasedTests);
 studentRouter.get("/attempt/:attemptId", isAuth, getAttemptById);
+
+studentRouter.get('/grandtest-leaderboard/:mockTestId', isAuth, getGrandTestLeaderboard);
 
 
 export default studentRouter;

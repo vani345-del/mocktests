@@ -1,4 +1,4 @@
-
+// frontend/src/components/admin/FormMocktest.jsx
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { useDispatch } from "react-redux";
@@ -26,6 +26,11 @@ export default function FormMocktest() {
     isPublished: false,
   });
 
+  // --- 👇 NEW STATE FOR GRAND TEST ---
+  const [isGrandTest, setIsGrandTest] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
+  // --- 👆 END OF NEW STATE ---
+
   const [subjects, setSubjects] = useState([{ ...defaultSubject }]);
 
   const handleSubjectChange = (i, key, value) => {
@@ -43,11 +48,21 @@ export default function FormMocktest() {
       ...form,
       subjects,
       isPublished: publish,
+      // --- 👇 ADD NEW FIELDS TO PAYLOAD ---
+      isGrandTest: isGrandTest,
+      scheduledFor: isGrandTest ? scheduledFor : null // Only send schedule if it's a grand test
+      // --- 👆 END OF NEW FIELDS ---
     };
     payload.totalQuestions = subjects.reduce(
       (acc, s) => acc + (s.easy + s.medium + s.hard),
       0
     );
+    
+    // --- Basic Validation ---
+    if (isGrandTest && !scheduledFor) {
+      alert("Please select a date and time for the Grand Test.");
+      return;
+    }
 
     try {
       const resultAction = await dispatch(createMockTest(payload));
@@ -153,6 +168,39 @@ export default function FormMocktest() {
               }
             />
           </div>
+          
+          {/* --- 👇 NEW GRAND TEST FIELDS --- */}
+          <div className="pt-4 border-t border-white/20">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="form-checkbox h-5 w-5 text-cyan-400 bg-white/10 border-white/20 rounded focus:ring-cyan-500"
+                  checked={isGrandTest}
+                  onChange={(e) => setIsGrandTest(e.target.checked)}
+                />
+                <span className="text-lg font-medium text-cyan-400">Is this a Grand Test?</span>
+              </label>
+
+              {isGrandTest && (
+                <motion.div
+                  initial={{ opacity: 0, flex: 0.5 }}
+                  animate={{ opacity: 1, flex: 1 }}
+                  className="flex-1"
+                >
+                  <Input
+                    label="Scheduled For (Date and Time)"
+                    type="datetime-local"
+                    value={scheduledFor}
+                    onChange={(e) => setScheduledFor(e.target.value)}
+                    required={isGrandTest}
+                  />
+                </motion.div>
+              )}
+            </div>
+          </div>
+          {/* --- 👆 END OF NEW FIELDS --- */}
+
 
           {/* Subjects Section */}
           <div className="pt-6 border-t border-white/20">

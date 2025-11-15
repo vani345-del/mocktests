@@ -42,13 +42,27 @@ const MockTestSchema = new mongoose.Schema({
   totalQuestions: { type: Number, default: 0 },
   totalMarks: { type: Number, default: 0 },
   negativeMarking: { type: Number, default: 0 }, // per question negative mark
-  price: { type: Number, default: 0 },
+  price: { type: Number,required: true, default: 0 },
   category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category',required: true },
-  categorySlug: String, 
+  categorySlug: String,
+  
   discountPrice: { type: Number, default: 0 },
   isPublished: { type: Boolean, default: false },
   subjects: [SubjectSchema],
   questions: [QuestionSchema],
+  isGrandTest: {
+    type: Boolean,
+    default: false // Default to false, so existing tests are not affected
+  },
+  scheduledFor: {
+    type: Date,
+    // This field is only required if it's a Grand Test
+    required: function() { return this.isGrandTest; } 
+  },
+  // --- END OF NEW FIELDS ---
+
+  createdAt: { type: Date, default: Date.now },
+  
 }, { timestamps: true });
 
 export default mongoose.model("MockTest", MockTestSchema);

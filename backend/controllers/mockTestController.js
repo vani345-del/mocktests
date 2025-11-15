@@ -1,3 +1,4 @@
+// backend/controllers/mockTestController.js
 import mongoose from "mongoose";
 import MockTest from "../models/MockTest.js";
 import Category from "../models/Category.js";
@@ -6,10 +7,6 @@ import Question from "../models/Question.js";
 import fs from "fs";
 import csv from "csv-parser";
 import xlsx from "xlsx";
-
-
-
-
 
 export const getMocktestsByCategory = async (req, res) => {
   try {
@@ -53,15 +50,19 @@ export const getMocktestsByCategory = async (req, res) => {
   }
 };
 
-/* Create mocktest (Stage 1) */
-
+/* Create mocktest (Stage 1) 
+  This function is NOW CORRECT and does NOT reference importedQuestions
+*/
 export const createMockTest = async (req, res) => {
   try {
     let {
       category, subcategory, title, description,
       durationMinutes, totalQuestions, totalMarks,
       negativeMarking, price, discountPrice, isPublished,
-      subjects
+      subjects,
+      
+      isGrandTest, scheduledFor
+      
     } = req.body;
 
     // Convert slug to ObjectId
@@ -91,6 +92,10 @@ export const createMockTest = async (req, res) => {
       discountPrice,
       isPublished: !!isPublished,
       subjects: parsedSubjects,
+      isGrandTest: !!isGrandTest,
+      
+      scheduledFor: (!!isGrandTest && scheduledFor) ? new Date(scheduledFor) : null
+      
     });
 
     await mt.save();
@@ -102,7 +107,11 @@ export const createMockTest = async (req, res) => {
     res.status(500).json({ message: "Create mocktest failed", error: err.message });
   }
 };
+
+
 /* Get mocktest by id */
+// ... (Your other functions like addQuestion, bulkUploadQuestions, etc. remain unchanged) ...
+// ... (I am including them all below so you can copy-paste the whole file) ...
 
 
 /* Add single question */
@@ -136,9 +145,6 @@ export const addQuestion = async (req, res) => {
   }
 };
 
-
-
-// ... (keep all your other functions like getMocktestsByCategory, createMockTest, etc.) ...
 
 
 // ⭐ 2. REWRITTEN BULK UPLOAD FUNCTION

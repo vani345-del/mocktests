@@ -5,6 +5,9 @@ import mockTestSlice from './mockTestSlice.js'
 import categoryReducer from './categorySlice';
 import cartReducer from './cartSlice.js';
 import dashboardReducer from "./dashboardSlice.js";
+import instructorReducer from "./instructorSlice";
+// --- 👇 ADD THIS IMPORT ---
+import studentReducer from "./studentSlice";
 
 
 export const store=configureStore({
@@ -13,7 +16,9 @@ export const store=configureStore({
         mocktest: mockTestSlice,
         category: categoryReducer,
         cart: cartReducer,
-        dashboard: dashboardReducer
+        dashboard: dashboardReducer,
+        instructors: instructorReducer,
+        students: studentReducer,
         
     }
 })

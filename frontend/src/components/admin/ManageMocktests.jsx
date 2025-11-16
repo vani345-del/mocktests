@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchCategories } from "../../redux/categorySlice";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom"; // 1. Import Link
 import AddCategory from "./AddCategory";
+import { FaArrowLeft } from "react-icons/fa"; // 2. Import icon
 
 const ManageMocktests = () => {
   const dispatch = useDispatch();
@@ -24,6 +25,15 @@ const ManageMocktests = () => {
 
   return (
     <div className="p-6">
+      {/* 3. Add Back Link */}
+      <Link
+        to="/admin"
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
+      >
+        <FaArrowLeft />
+        Back to Dashboard
+      </Link>
+
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-semibold">Select a Category</h1>
 

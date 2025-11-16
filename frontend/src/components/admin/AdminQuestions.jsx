@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom"; // 1. Import useNavigate
 import { motion } from "framer-motion";
 import api from "../../api/axios";
 import { useDispatch } from "react-redux";
 import { addQuestion, bulkUpload } from "../../redux/mockTestSlice";
 import toast from "react-hot-toast";
+import { FaArrowLeft } from "react-icons/fa"; // 2. Import a back icon
 
 export default function AdminQuestions() {
   const { id } = useParams();
@@ -21,6 +22,7 @@ export default function AdminQuestions() {
   });
   const [file, setFile] = useState(null);
   const dispatch = useDispatch();
+  const navigate = useNavigate(); // 3. Initialize navigate
 
   useEffect(() => {
     const fetch = async () => {
@@ -102,6 +104,15 @@ export default function AdminQuestions() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
       >
+        {/* 4. Add the Back button here */}
+        <button
+          onClick={() => navigate(-1)}
+          className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-300 mb-4 transition"
+        >
+          <FaArrowLeft />
+          Back to Mocktest List
+        </button>
+
         <h2 className="text-3xl font-bold text-center bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-8">
           Add Questions – {mocktest?.title || "Loading..."}
         </h2>

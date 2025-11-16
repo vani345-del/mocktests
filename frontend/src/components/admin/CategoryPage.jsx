@@ -7,8 +7,9 @@ import {
   FaBook,
   FaToggleOn,
   FaToggleOff,
+  FaArrowLeft, // 1. Import a back icon
 } from "react-icons/fa";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom"; // 2. Import Link
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import api from "../../api/axios";
@@ -56,6 +57,15 @@ export default function CategoryPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 px-6 py-10">
+      {/* 3. Add the Back Link here */}
+      <Link
+        to="/admin/mocktests"
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
+      >
+        <FaArrowLeft />
+        Back to All Categories
+      </Link>
+
       {/* Header Section */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-10">
         <h1 className="text-4xl font-bold text-gray-800 capitalize text-center sm:text-left tracking-tight">

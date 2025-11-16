@@ -50,6 +50,13 @@ const userSchema = new mongoose.Schema(
       },
     ],
 
+    attempts: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Attempt",
+      },
+    ],
+
     isVerified: {
       type: Boolean,
       default: false,

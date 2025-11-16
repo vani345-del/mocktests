@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { FaUpload, FaPlusCircle, FaSave } from "react-icons/fa";
+import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa"; // 1. Import icon
 
 const EditMocktestPage = () => {
   const { id } = useParams();
@@ -44,6 +44,15 @@ const EditMocktestPage = () => {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
+      {/* 2. Add Back button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
+      >
+        <FaArrowLeft />
+        Back
+      </button>
+
       <h1 className="text-2xl font-semibold mb-6 text-gray-800">
         Edit Mocktest: {mocktest.title}
       </h1>

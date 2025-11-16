@@ -109,3 +109,83 @@ export const getme = async (req, res) => {
   }
 };
 
+
+// --- 👇 NEW FUNCTION: Add a new instructor (by admin) ---
+export const addInstructor = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+
+    // Validation
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required." });
+    }
+    if (!validator.isEmail(email)) {
+      return res.status(400).json({ message: "Enter a valid email" });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ message: "Password must be at least 8 characters long" });
+    }
+
+    // Check for existing user
+    let existUser = await User.findOne({ email });
+    if (existUser) {
+      return res.status(400).json({ message: "User with this email already exists" });
+    }
+
+    // Create user
+    let hashPassword = await bcrypt.hash(password, 10);
+    const newInstructor = await User.create({
+      name,
+      email,
+      password: hashPassword,
+      role: 'instructor' // Hardcode role
+    });
+
+    // Don't send password back
+    const { password: _, ...instructorData } = newInstructor.toObject();
+
+    return res.status(201).json({ 
+      message: "Instructor added successfully", 
+      instructor: instructorData 
+    });
+
+  } catch (error) {
+    return res.status(500).json({ message: `Add instructor error: ${error.message}` });
+  }
+};
+
+
+export const getAllInstructors = async (req, res) => {
+  try {
+    const instructors = await User.find({ role: 'instructor' })
+      .select("-password")
+      .sort({ createdAt: -1 });
+    res.status(200).json(instructors);
+  } catch (error) {
+    res.status(500).json({ message: `Server error: ${error.message}` });
+  }
+};
+
+export const getAllStudents = async (req, res) => {
+  try {
+    const students = await User.aggregate([
+      { $match: { role: 'student' } },
+      { $sort: { createdAt: -1 } },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          email: 1,
+          createdAt: 1,
+          // Add a new field 'purchasedTestCount' by getting the size of the 'purchasedTests' array
+          purchasedTestCount: { $size: { $ifNull: ["$purchasedTests", []] } }
+        }
+      }
+    ]);
+    
+    res.status(200).json(students);
+  } catch (error) {
+    res.status(500).json({ message: `Server error: ${error.message}` });
+  }
+}
+

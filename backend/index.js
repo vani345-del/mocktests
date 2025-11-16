@@ -16,6 +16,7 @@ import publicMocktestRoutes from './routes/publicMocktestRoutes.js';
 import cartRoute from "./routes/cartRoute.js";
 import paymentRoute from "./routes/paymentRoute.js"; 
 import dashboardRoute from "./routes/dashboardRoute.js";
+import adminUserRoutes from './routes/adminUserRoutes.js';
 
 
 dotenv.config();
@@ -41,6 +42,7 @@ app.use("/api", publicRoutes);
 app.use("/api/cart", cartRoute);
 
 app.use("/api/v1/dashboard", dashboardRoute);
+app.use('/api/admin', adminUserRoutes);
 
 // ✅ Static & API Routes
 

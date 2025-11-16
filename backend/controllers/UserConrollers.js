@@ -189,3 +189,31 @@ export const getAllStudents = async (req, res) => {
   }
 }
 
+
+export const toggleInstructorStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const instructor = await User.findById(id);
+
+    if (!instructor) {
+      return res.status(404).json({ message: "Instructor not found" });
+    }
+
+    if (instructor.role !== 'instructor') {
+      return res.status(400).json({ message: "This user is not an instructor" });
+    }
+
+    // Toggle the isActive status
+    instructor.isActive = !instructor.isActive;
+    await instructor.save();
+
+    // Don't send password back
+    const { password: _, ...instructorData } = instructor.toObject();
+
+    const message = instructor.isActive ? "Instructor unblocked successfully" : "Instructor blocked successfully";
+    res.status(200).json({ message, instructor: instructorData });
+
+  } catch (error) {
+    res.status(500).json({ message: `Server error: ${error.message}` });
+  }
+};

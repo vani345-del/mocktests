@@ -33,6 +33,27 @@ export const addInstructor = createAsyncThunk(
   }
 );
 
+export const toggleInstructorStatus = createAsyncThunk(
+  "instructors/toggleInstructorStatus",
+  async (instructorId, { rejectWithValue }) => {
+    try {
+      // This matches the new backend route
+      const { data } = await api.put(
+        `/api/admin/instructors/${instructorId}/toggle-status`
+      );
+      toast.success(data.message);
+      return data.instructor; // Return the updated instructor object
+    } catch (err) {
+      const message = err.response?.data?.message || err.message;
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+    
+  }
+
+  
+);
+
 // --- Slice ---
 
 const initialState = {
@@ -73,7 +94,21 @@ const instructorSlice = createSlice({
       .addCase(addInstructor.rejected, (state, action) => {
         // Error is already handled by toast in the thunk
         // You could log action.payload here if needed
-      });
+      })
+      .addCase(toggleInstructorStatus.fulfilled, (state, action) => {
+        const updatedInstructor = action.payload;
+        // Find the instructor in the state and update them
+        const index = state.instructors.findIndex(
+          (inst) => inst._id === updatedInstructor._id
+        );
+        if (index !== -1) {
+          state.instructors[index] = updatedInstructor;
+        }
+      })
+      .addCase(toggleInstructorStatus.rejected, (state, action) => {
+        // Error is already handled by toast in the thunk
+      })
+      
   },
 });
 

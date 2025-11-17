@@ -5,23 +5,53 @@ import api from "../api/axios";
 /* -----------------------------
    ✅ ADMIN SIDE LOGIC
 ----------------------------- */
-export const fetchPublicTestById = createAsyncThunk(
-  "mocktest/fetchPublicTestById",
+
+// --- Thunk for fetching a single test for editing ---
+export const fetchMockTestByIdForEdit = createAsyncThunk(
+  "mocktest/fetchByIdAdmin",
   async (id, { rejectWithValue }) => {
     try {
-      const response = await api.get(`api/public/mocktests/${id}`);
-      return response.data; // Expects a single test object
+      const response = await api.get(`api/admin/mocktests/${id}`);
+      return response.data.mocktest; // Return the mocktest object
     } catch (err) {
       return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
+
 // create mocktest
 export const createMockTest = createAsyncThunk(
   "mocktest/create",
   async (payload, { rejectWithValue }) => {
     try {
       const res = await api.post("api/admin/mocktests", payload);
+      return res.data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || err.message);
+    }
+  }
+);
+
+// --- 👇 UPDATED THUNK for updating a test ---
+export const updateMockTest = createAsyncThunk(
+  "mocktest/update",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const { id, ...data } = payload;
+
+      // ✅ --- FIX: Transform data to match backend expectation for PUT route ---
+      const transformedData = {
+        ...data,
+        duration: data.durationMinutes, // Rename durationMinutes to duration
+        negativeMarks: data.negativeMarking, // Rename negativeMarking to negativeMarks
+      };
+
+      // Clean up the object to not send the old names
+      delete transformedData.durationMinutes;
+      delete transformedData.negativeMarking;
+      // --- END OF FIX ---
+
+      const res = await api.put(`api/admin/mocktests/${id}`, transformedData); // Send transformed data
       return res.data;
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
@@ -104,6 +134,18 @@ export const fetchPublicMockTests = createAsyncThunk(
   }
 );
 
+export const fetchPublicTestById = createAsyncThunk(
+  "mocktest/fetchPublicTestById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const response = await api.get(`api/public/mocktests/${id}`);
+      return response.data; // Expects a single test object
+    } catch (err) {
+      return rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
 // --- 👇 NEW LEADERBOARD THUNK ---
 export const fetchGrandTestLeaderboard = createAsyncThunk(
   'mocktest/fetchGrandTestLeaderboard',
@@ -117,50 +159,7 @@ export const fetchGrandTestLeaderboard = createAsyncThunk(
   }
 );
 // --- 👆 END OF NEW THUNK ---
-export const getMockTestById = createAsyncThunk(
-  "mockTests/getMockTestById",
-  async (id, { rejectWithValue }) => {
-    try {
-      const { data } = await api.get(`/mocktests/${id}`);
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data || "Error fetching test");
-    }
-  }
-);
 
-// --- 燥 NEW THUNK to update a test ---
-export const updateMockTest = createAsyncThunk(
-  "mockTests/updateMockTest",
-  async (testData, { rejectWithValue }) => {
-    try {
-      const { id, ...payload } = testData;
-      // Note: Your backend route for updating might be PUT /mocktests/:id
-      // Please ensure this matches your backend API routes
-      const { data } = await api.put(`/mocktests/${id}`, payload); 
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data || "Error updating test");
-    }
-  }
-);
-export const getMocktestsByCategory = createAsyncThunk(
-  "mockTests/getMocktestsByCategory",
-  async (category, { rejectWithValue }) => {
-    try {
-      // Make sure your backend route matches this.
-      // Based on your backend controller, the route is '/mocktests?category=...'
-      // Or if you have a specific route '/mocktests/category/:category'
-      
-      // Let's use the /mocktests/category/:category route you might have
-      // If not, change this to: `/mocktests?category=${category}`
-      const { data } = await api.get(`/mocktests/category/${category}`);
-      return data;
-    } catch (err) {
-      return rejectWithValue(err.response?.data || "Error fetching tests");
-    }
-  }
-);
 
 /* -----------------------------
    🧠 SLICE DEFINITION
@@ -172,8 +171,6 @@ const slice = createSlice({
     current: null, // current selected mocktest (admin)
     loading: false,
     error: null,
-    currentMockTest: null,
-    
 
     // ✅ public (student side)
     publicMocktests: [],
@@ -188,73 +185,59 @@ const slice = createSlice({
     leaderboardStatus: "idle",
     leaderboardError: null,
     // --- 👆 END OF NEW STATE ---
+
+    // --- State for single public test (details page) ---
+    currentTest: null,
+    currentTestStatus: 'idle',
+    currentTestError: null
   },
 
-  reducers: {
-    clearCurrentMockTest: (state) => {
-      state.currentMockTest = null;
-    },
-  },
+  reducers: {},
 
   extraReducers: (builder) => {
     /* ---------- ADMIN ---------- */
     builder
+      // --- ✅ Fetch by ID for Edit ---
+      .addCase(fetchMockTestByIdForEdit.pending, (s) => {
+        s.loading = true;
+        s.current = null;
+        s.error = null;
+      })
+      .addCase(fetchMockTestByIdForEdit.fulfilled, (s, a) => {
+        s.loading = false;
+        s.current = a.payload;
+      })
+      .addCase(fetchMockTestByIdForEdit.rejected, (s, a) => {
+        s.loading = false;
+        s.error = a.payload;
+      })
 
-
-      .addCase(getMocktestsByCategory.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(getMocktestsByCategory.fulfilled, (state, action) => {
-        state.loading = false;
-        state.mocktests = action.payload;
-      })
-      .addCase(getMocktestsByCategory.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
       // create mocktest
-      .addCase(createMockTest.pending, (state) => {
-        state.loading = true;
+      .addCase(createMockTest.pending, (s) => {
+        s.loading = true;
+        s.error = null;
       })
-      .addCase(createMockTest.fulfilled, (state, action) => {
-        state.loading = false;
-        state.mocktests.unshift(action.payload); // Add to list
+      .addCase(createMockTest.fulfilled, (s, a) => {
+        s.loading = false;
+        s.current = a.payload;
       })
-      .addCase(createMockTest.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+      .addCase(createMockTest.rejected, (s, a) => {
+        s.loading = false;
+        s.error = a.payload;
       })
 
-      .addCase(getMockTestById.pending, (state) => {
-        state.loading = true;
-        state.currentMockTest = null;
-        state.error = null;
+      // --- ✅ Update Mocktest ---
+      .addCase(updateMockTest.pending, (s) => {
+        s.loading = true;
+        s.error = null;
       })
-      .addCase(getMockTestById.fulfilled, (state, action) => {
-        state.loading = false;
-        state.currentMockTest = action.payload;
+      .addCase(updateMockTest.fulfilled, (s, a) => {
+        s.loading = false;
+        s.current = a.payload;
       })
-      .addCase(getMockTestById.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      }).addCase(updateMockTest.pending, (state) => {
-        state.loading = true;
-      })
-      .addCase(updateMockTest.fulfilled, (state, action) => {
-        state.loading = false;
-        state.currentMockTest = action.payload;
-        // Also update the test in the main list
-        const index = state.mocktests.findIndex(
-          (t) => t._id === action.payload._id
-        );
-        if (index !== -1) {
-          state.mocktests[index] = action.payload;
-        }
-      })
-      .addCase(updateMockTest.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+      .addCase(updateMockTest.rejected, (s, a) => {
+        s.loading = false;
+        s.error = a.payload;
       })
 
       // add question
@@ -361,8 +344,6 @@ const slice = createSlice({
         state.leaderboardError = action.payload;
       });
     // --- 👆 END OF NEW REDUCERS ---
-      
-
   },
 });
 

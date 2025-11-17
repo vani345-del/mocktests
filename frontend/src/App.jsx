@@ -18,7 +18,7 @@ import ManageStudents from "./components/admin/ManageStudents";
 import ManageMocktests from "./components/admin/ManageMocktests";
 import WriteMocktest from "./pages/student/WriteMocktest";
 import CategoryPage from "./components/admin/CategoryPage";
-import EditMocktestPage from "./components/admin/EditMocktestPage";
+// 🛑 import EditMocktestPage from "./components/admin/EditMocktestPage"; // No longer needed
 import AdminQuestions from "./components/admin/AdminQuestions";
 import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
@@ -26,7 +26,8 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import { Toaster } from 'react-hot-toast';
 import InstructionsPage from "./pages/student/InstructionsPage";
-import CreateMocktestPage from "./components/admin/CreateMocktestPage";
+// 🛑 import CreateMocktestPage from "./components/admin/CreateMocktestPage"; // No longer needed
+import FormMocktest from "./components/admin/FormMocktest"; // ✅ Import main form
 
 // Import the student dashboard
 import StuDashboard from "./pages/student/StuDashboard"; 
@@ -152,14 +153,22 @@ const App = () => {
             <Route path="students" element={<ManageStudents />} />
              <Route path="/admin/mocktests" element={<ManageMocktests />} />
             <Route path="/admin/mocktests/:category" element={<CategoryPage />} />
-            <Route path="/admin/mocktests/:category/edit/:id" element={<EditMocktestPage />} />
-            <Route path="/admin/mocktests/:id/new/questions" element={<AdminQuestions />} />
+            
+            {/* --- ✅ UPDATED EDIT ROUTE --- */}
+            {/* This route now points to FormMocktest */}
             <Route 
-    path="/admin/categories/:category/new" 
-    element={<CreateMocktestPage />} 
-
-  />
-  
+              path="/admin/mocktests/:category/edit/:id" 
+              element={<FormMocktest />}
+            />
+            
+            <Route path="/admin/mocktests/:id/new/questions" element={<AdminQuestions />} />
+            
+            {/* --- ✅ UPDATED CREATE ROUTE --- */}
+            {/* This route also points to FormMocktest */}
+            <Route 
+              path="/admin/categories/:category/new" 
+              element={<FormMocktest />}
+            />
           </Route>
 
           {/* Fallback */}

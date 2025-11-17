@@ -1,125 +1,155 @@
 // frontend/src/components/admin/FormMocktest.jsx
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-// 燥 We no longer import createMockTest here, the parent will handle it
-import { useNavigate } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
+import { 
+  createMockTest, 
+  fetchMockTestByIdForEdit, // ✅ Import fetch thunk
+  updateMockTest // ✅ Import update thunk
+} from "../../redux/mockTestSlice"; 
+import { useNavigate, useParams } from "react-router-dom";
+import { FaUpload, FaPlusCircle, FaArrowLeft } from "react-icons/fa"; // ✅ Import icons
+import { toast } from "react-hot-toast"; // ✅ Import toast
 
-// 燥 This default is for a NEW test
+// --- Defaults are now empty strings ---
 const defaultSubject = { name: "", easy: "", medium: "", hard: "" };
-const defaultFormState = {
-  category: "",
-  subcategory: "",
-  title: "",
-  description: "",
-  durationMinutes: "",
-  totalQuestions: 0,
-  totalMarks: "",
-  negativeMarking: "",
-  price: "",
-  discountPrice: "",
-  isPublished: false,
-};
 
-// 燥 We now accept props for reusability
-export default function FormMocktest({
-  formTitle,
-  initialData,
-  onSubmitHandler,
-}) {
-  const navigate = useNavigate(); // Still needed for navigation
+export default function FormMocktest() {
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  
+  // ✅ Get URL params. `id` will exist in edit mode.
+  const { category, id } = useParams();
+  const isEditMode = Boolean(id);
 
-  // 燥 Initialize state based on initialData prop
-  const [form, setForm] = useState(() => ({
-    ...defaultFormState,
-    ...initialData,
-  }));
+  // ✅ Get mocktest data and loading status from the slice
+  const { 
+    current: currentMocktest, 
+    loading: sliceLoading, 
+    error: sliceError 
+  } = useSelector((state) => state.mocktest);
 
-  const [isGrandTest, setIsGrandTest] = useState(
-    initialData?.isGrandTest || false
-  );
-  const [scheduledFor, setScheduledFor] = useState(
-    initialData?.scheduledFor || ""
-  );
-  const [subjects, setSubjects] = useState(
-    initialData?.subjects && initialData.subjects.length > 0
-      ? initialData.subjects
-      : [{ ...defaultSubject }]
-  );
+  // --- Numeric defaults are now empty strings ---
+  const [form, setForm] = useState({
+    category: category || "",
+    subcategory: "",
+    title: "",
+    description: "",
+    durationMinutes: "",
+    totalQuestions: 0, // This is auto-calculated
+    totalMarks: "",
+    negativeMarking: "",
+    price: "",
+    discountPrice: "",
+    isPublished: false,
+  });
 
+  const [isGrandTest, setIsGrandTest] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
+  const [subjects, setSubjects] = useState([{ ...defaultSubject }]);
   const [errors, setErrors] = useState({});
 
-  // 燥 Add a useEffect to reset form if initialData changes
+  // ✅ --- EFFECT 1: Fetch data if in Edit Mode ---
   useEffect(() => {
-    if (initialData) {
-      setForm({ ...defaultFormState, ...initialData });
-      setIsGrandTest(initialData.isGrandTest || false);
-      setScheduledFor(initialData.scheduledFor || "");
-      setSubjects(
-        initialData.subjects && initialData.subjects.length > 0
-          ? initialData.subjects
-          : [{ ...defaultSubject }]
+    if (isEditMode) {
+      // Dispatch the action to fetch the specific mock test
+      dispatch(fetchMockTestByIdForEdit(id));
+    }
+  }, [dispatch, id, isEditMode]);
+
+  // ✅ --- EFFECT 2: Populate form when data loads in Edit Mode ---
+  useEffect(() => {
+    // Only run this if we are in edit mode AND data has arrived
+    if (isEditMode && currentMocktest) {
+      
+      // ✅ --- FIX: Map fetched data names to form state names ---
+      setForm({
+        category: currentMocktest.category || category,
+        subcategory: currentMocktest.subcategory || "",
+        title: currentMocktest.title || "",
+        description: currentMocktest.description || "",
+        
+        // Map backend 'duration' to form's 'durationMinutes'
+        durationMinutes: currentMocktest.duration?.toString() || "", 
+        
+        totalQuestions: currentMocktest.totalQuestions || 0,
+        totalMarks: currentMocktest.totalMarks?.toString() || "",
+        
+        // Map backend 'negativeMarks' to form's 'negativeMarking'
+        negativeMarking: currentMocktest.negativeMarks?.toString() || "", 
+        
+        price: currentMocktest.price?.toString() || "",
+        discountPrice: currentMocktest.discountPrice?.toString() || "",
+        isPublished: currentMocktest.isPublished || false,
+      });
+      // --- END OF FIX ---
+
+      // This part should be fine as `subjects` is likely correct
+      if (Array.isArray(currentMocktest.subjects) && currentMocktest.subjects.length > 0) {
+        setSubjects(
+          currentMocktest.subjects.map((s) => ({
+            name: s.name || "",
+            easy: s.easy?.toString() || "",
+            medium: s.medium?.toString() || "",
+            hard: s.hard?.toString() || "",
+          }))
+        );
+      } else {
+        setSubjects([{ ...defaultSubject }]);
+      }
+      
+      setIsGrandTest(currentMocktest.isGrandTest || false);
+      
+      // Format date for <input type="datetime-local">
+      setScheduledFor(
+        currentMocktest.scheduledFor
+          ? new Date(currentMocktest.scheduledFor).toISOString().slice(0, 16)
+          : ""
       );
     }
-  }, [initialData]);
+  }, [isEditMode, currentMocktest, category]);
 
+
+  // --- Store raw string value ---
   const handleSubjectChange = (i, key, value) => {
     const copy = [...subjects];
-    copy[i][key] = value;
+    copy[i][key] = value; // Store the value as-is (string)
     setSubjects(copy);
   };
 
   const addSubject = () => setSubjects([...subjects, { ...defaultSubject }]);
-  const removeSubject = (i) =>
-    setSubjects(subjects.filter((_, idx) => idx !== i));
+  const removeSubject = (i) => setSubjects(subjects.filter((_, idx) => idx !== i));
 
-  // 燥 This validation logic is from our previous session
+  // --- More robust validation for empty strings vs. numeric values ---
   const validateForm = () => {
     const newErrors = {};
-    const {
-      subcategory,
-      title,
-      description,
-      durationMinutes,
-      totalMarks,
-      negativeMarking,
-      price,
-      discountPrice,
+    const { 
+      subcategory, title, description, durationMinutes, 
+      totalMarks, negativeMarking, price, discountPrice 
     } = form;
 
     // Basic form validation
     if (!title.trim()) newErrors.title = "Title is required.";
-    if (!subcategory.trim())
-      newErrors.subcategory = "Subcategory is required.";
-    if (!description.trim())
-      newErrors.description = "Description is required.";
+    if (!subcategory.trim()) newErrors.subcategory = "Subcategory is required.";
+    if (!description.trim()) newErrors.description = "Description is required.";
 
-    if (!durationMinutes.toString().trim())
-      newErrors.durationMinutes = "Duration is required.";
-    else if (Number(durationMinutes) <= 0)
-      newErrors.durationMinutes = "Duration must be greater than 0.";
+    if (!durationMinutes.trim()) newErrors.durationMinutes = "Duration is required.";
+    else if (Number(durationMinutes) <= 0) newErrors.durationMinutes = "Duration must be greater than 0.";
 
-    if (!totalMarks.toString().trim())
-      newErrors.totalMarks = "Total marks is required.";
-    else if (Number(totalMarks) <= 0)
-      newErrors.totalMarks = "Total marks must be greater than 0.";
+    if (!totalMarks.trim()) newErrors.totalMarks = "Total marks is required.";
+    else if (Number(totalMarks) <= 0) newErrors.totalMarks = "Total marks must be greater than 0.";
 
-    if (negativeMarking.toString().trim() === "")
-      newErrors.negativeMarking = "Negative marking is required.";
-    else if (Number(negativeMarking) < 0)
-      newErrors.negativeMarking = "Negative marking cannot be negative.";
+    if (!negativeMarking.trim()) newErrors.negativeMarking = "Negative marking is required.";
+    else if (Number(negativeMarking) < 0) newErrors.negativeMarking = "Negative marking cannot be negative.";
 
-    if (!price.toString().trim()) newErrors.price = "Price is required.";
+    if (!price.trim()) newErrors.price = "Price is required.";
     else if (Number(price) < 0) newErrors.price = "Price cannot be negative.";
-
-    // Discount price is optional
-    if (discountPrice.toString().trim() && Number(discountPrice) < 0) {
+    
+    // Discount price is optional, but if present, must be valid
+    if (discountPrice.trim() && Number(discountPrice) < 0) {
       newErrors.discountPrice = "Discount price cannot be negative.";
-    } else if (
-      Number(discountPrice) > 0 &&
-      Number(discountPrice) >= Number(price)
-    ) {
-      newErrors.discountPrice =
-        "Discount price must be less than the regular price.";
+    } else if (Number(discountPrice) > 0 && Number(discountPrice) >= Number(price)) {
+      newErrors.discountPrice = "Discount price must be less than the regular price.";
     }
 
     // Grand Test validation
@@ -132,21 +162,21 @@ export default function FormMocktest({
     if (subjects.length === 0) {
       newErrors.subjectsRoot = "At least one subject is required.";
     }
-
+    
     let totalQ = 0;
     subjects.forEach((s, i) => {
       const subjectError = {};
       if (!s.name.trim()) {
         subjectError.name = "Subject name is required.";
       }
-
+      
       const easy = Number(s.easy) || 0;
       const medium = Number(s.medium) || 0;
       const hard = Number(s.hard) || 0;
       const subjectTotal = easy + medium + hard;
-
+      
       if (subjectTotal <= 0) {
-        subjectError.questions = "Subject must have at least one question.";
+         subjectError.questions = "Subject must have at least one question.";
       }
       totalQ += subjectTotal;
 
@@ -158,64 +188,108 @@ export default function FormMocktest({
     if (subjectErrors.length > 0) {
       newErrors.subjects = subjectErrors;
     }
-
+    
     setErrors(newErrors);
     return { isValid: Object.keys(newErrors).length === 0, totalQuestions: totalQ };
   };
 
-  // 燥 This function now calls the prop handler
+  // ✅ --- UPDATED OnSubmit: Handles both Create and Edit ---
   const onSubmit = async (e, publish = false) => {
     e.preventDefault();
-
+    
     const { isValid, totalQuestions } = validateForm();
-
+    
     if (!isValid) {
-      console.log("Form validation failed", errors);
-      return;
+      toast.error("Please fix the errors in the form.");
+      return; // Stop submission
     }
 
-    const trimmedSubjects = subjects.map((s) => ({
+    // --- Cast subjects back to numbers ---
+    const trimmedSubjects = subjects.map(s => ({
       name: s.name.trim(),
       easy: Number(s.easy) || 0,
       medium: Number(s.medium) || 0,
-      hard: Number(s.hard) || 0,
+      hard: Number(s.hard) || 0
     }));
 
+    // --- Cast form fields back to numbers ---
+    // This payload uses the form's state names (durationMinutes, negativeMarking)
     const payload = {
       ...form,
-      // 燥 Handle both object (from edit) and string (from new)
-      category: form.category.slug || form.category,
       durationMinutes: Number(form.durationMinutes),
       totalMarks: Number(form.totalMarks),
       negativeMarking: Number(form.negativeMarking),
       price: Number(form.price),
-      discountPrice: Number(form.discountPrice) || 0,
+      discountPrice: Number(form.discountPrice) || 0, // Default to 0 if empty
       subjects: trimmedSubjects,
       isPublished: publish,
       isGrandTest: isGrandTest,
       scheduledFor: isGrandTest ? scheduledFor : null,
-      totalQuestions: totalQuestions,
+      totalQuestions: totalQuestions // Use the count from validation
     };
 
-    // 燥 Call the parent's submit handler
     try {
-      // The parent handler (handleCreateTest or handleUpdateTest) is now responsible
-      // for dispatching and navigation.
-      await onSubmitHandler(payload, publish);
+      let resultAction;
+      if (isEditMode) {
+        // --- UPDATE LOGIC ---
+        toast.loading("Updating mock test...");
+        // Pass the ID along with the payload
+        // The `updateMockTest` thunk will handle renaming the properties
+        resultAction = await dispatch(updateMockTest({ ...payload, id })); 
+        
+        if (updateMockTest.fulfilled.match(resultAction)) {
+          toast.dismiss();
+          toast.success("Mock test updated successfully!");
+          navigate(`/admin/mocktests/${payload.category}`); // Go back to category page
+        } else {
+          toast.dismiss();
+          toast.error(resultAction.payload?.message || "Failed to update mock test.");
+          setErrors({ form: resultAction.payload?.message || "Failed to update mock test." });
+        }
+
+      } else {
+        // --- CREATE LOGIC (existing) ---
+        toast.loading("Creating mock test...");
+        resultAction = await dispatch(createMockTest(payload));
+
+        if (createMockTest.fulfilled.match(resultAction)) {
+          toast.dismiss();
+          toast.success("Mock test created! Let's add questions.");
+          const newId = resultAction.payload._id;
+          navigate(`/admin/mocktests/${newId}/new/questions`); // Go to add questions
+        } else {
+          toast.dismiss();
+          toast.error(resultAction.payload?.message || "Failed to create mock test.");
+          setErrors({ form: resultAction.payload?.message || "Failed to create mock test." });
+        }
+      }
     } catch (err) {
-      console.error("Submission failed", err);
-      setErrors({ form: "An unexpected error occurred during submission." });
+      toast.dismiss();
+      toast.error("An unexpected error occurred.");
+      console.error(err);
+      setErrors({ form: "An unexpected error occurred." });
     }
   };
-
+  
+  const displayError = errors.form ? <div className="text-red-400 text-center mb-4">{errors.form}</div> : null;
+  
+  // --- General handler for string inputs ---
   const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setForm((prevForm) => ({ ...prevForm, [name]: value }));
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const displayError = errors.form ? (
-    <div className="text-red-400 text-center mb-4">{errors.form}</div>
-  ) : null;
+  // ✅ Show loading spinner while fetching in edit mode
+  if (isEditMode && sliceLoading) {
+    return (
+      <motion.div
+        className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center py-10 text-white text-2xl"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+      >
+        Loading Test Data...
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -229,10 +303,21 @@ export default function FormMocktest({
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
       >
-        <h2 className="text-3xl font-bold text-center bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-6">
-          {formTitle || "Mock Test Form"} {/* 燥 Use prop for title */}
-        </h2>
+        {/* ✅ Back Button */}
+        <button
+          type="button"
+          onClick={() => navigate(-1)} // Go back to previous page
+          className="flex items-center gap-2 text-sm text-cyan-400 hover:text-cyan-200 mb-4 transition font-medium"
+        >
+          <FaArrowLeft />
+          Back
+        </button>
 
+        {/* ✅ Dynamic Title */}
+        <h2 className="text-3xl font-bold text-center bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent mb-6">
+          {isEditMode ? "Edit Mock Test" : "Create Mock Test"}
+        </h2>
+        
         {displayError}
 
         <form onSubmit={(e) => onSubmit(e, false)} className="space-y-6">
@@ -241,11 +326,10 @@ export default function FormMocktest({
             <Input
               label="Category"
               name="category"
-              // 燥 Handle object (from edit) vs. string (from new)
-              value={form.category.name || form.category}
+              value={form.category}
               onChange={handleFormChange}
               error={errors.category}
-              disabled
+              disabled 
             />
             <Input
               label="Subcategory"
@@ -279,9 +363,9 @@ export default function FormMocktest({
             <Input
               label="Duration (minutes)"
               type="number"
-              name="durationMinutes"
+              name="durationMinutes" // This name is correct for the form state
               min="0"
-              value={form.durationMinutes}
+              value={form.durationMinutes} // It's populated from 'duration'
               onChange={handleFormChange}
               error={errors.durationMinutes}
             />
@@ -297,9 +381,9 @@ export default function FormMocktest({
             <Input
               label="Negative Marking (per question)"
               type="number"
-              name="negativeMarking"
+              name="negativeMarking" // This name is correct for the form state
               step="0.01"
-              value={form.negativeMarking}
+              value={form.negativeMarking} // It's populated from 'negativeMarks'
               onChange={handleFormChange}
               error={errors.negativeMarking}
             />
@@ -326,8 +410,8 @@ export default function FormMocktest({
               error={errors.discountPrice}
             />
           </div>
-
-          {/* NEW GRAND TEST FIELDS */}
+          
+          {/* GRAND TEST FIELDS */}
           <div className="pt-4 border-t border-white/20">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <label className="flex items-center space-x-3 cursor-pointer">
@@ -337,9 +421,7 @@ export default function FormMocktest({
                   checked={isGrandTest}
                   onChange={(e) => setIsGrandTest(e.target.checked)}
                 />
-                <span className="text-lg font-medium text-cyan-400">
-                  Is this a Grand Test?
-                </span>
+                <span className="text-lg font-medium text-cyan-400">Is this a Grand Test?</span>
               </label>
 
               {isGrandTest && (
@@ -362,16 +444,13 @@ export default function FormMocktest({
           </div>
           {/* END OF NEW FIELDS */}
 
+
           {/* Subjects Section */}
           <div className="pt-6 border-t border-white/20">
             <h3 className="text-lg font-semibold mb-3 text-cyan-400">
               Subjects & Difficulty Levels
             </h3>
-            {errors.subjectsRoot && (
-              <p className="text-red-400 text-sm mb-2">
-                {errors.subjectsRoot}
-              </p>
-            )}
+            {errors.subjectsRoot && <p className="text-red-400 text-sm mb-2">{errors.subjectsRoot}</p>}
 
             {subjects.map((s, i) => (
               <motion.div
@@ -386,14 +465,10 @@ export default function FormMocktest({
                       className="bg-transparent border-b border-white/30 focus:border-cyan-400 outline-none text-white w-full"
                       placeholder="Subject name"
                       value={s.name}
-                      onChange={(e) =>
-                        handleSubjectChange(i, "name", e.target.value)
-                      }
+                      onChange={(e) => handleSubjectChange(i, "name", e.target.value)}
                     />
                     {errors.subjects?.[i]?.name && (
-                      <p className="text-red-400 text-xs mt-1">
-                        {errors.subjects[i].name}
-                      </p>
+                      <p className="text-red-400 text-xs mt-1">{errors.subjects[i].name}</p>
                     )}
                   </div>
                   {subjects.length > 1 && (
@@ -402,8 +477,7 @@ export default function FormMocktest({
                       onClick={() => removeSubject(i)}
                       className="text-red-400 hover:text-red-300 transition"
                     >
-                      Remove 笨{" "}
-                    </button>
+                      Remove 笨                    </button>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-3 mt-3">
@@ -419,7 +493,7 @@ export default function FormMocktest({
                   <InputMini
                     label="Medium"
                     type="number"
-                    min="0"
+                     min="0"
                     value={s.medium}
                     onChange={(e) =>
                       handleSubjectChange(i, "medium", e.target.value)
@@ -428,17 +502,15 @@ export default function FormMocktest({
                   <InputMini
                     label="Hard"
                     type="number"
-                    min="0"
+                     min="0"
                     value={s.hard}
                     onChange={(e) =>
                       handleSubjectChange(i, "hard", e.target.value)
                     }
                   />
                 </div>
-                {errors.subjects?.[i]?.questions && (
-                  <p className="text-red-400 text-xs mt-2">
-                    {errors.subjects[i].questions}
-                  </p>
+                 {errors.subjects?.[i]?.questions && (
+                  <p className="text-red-400 text-xs mt-2">{errors.subjects[i].questions}</p>
                 )}
               </motion.div>
             ))}
@@ -452,29 +524,61 @@ export default function FormMocktest({
             </button>
           </div>
 
-          {/* Action Buttons */}
+          {/* ✅ Action Buttons (Dynamic Text) */}
           <div className="flex justify-center gap-4 pt-6">
             <button
               type="submit"
-              className="px-6 py-2 rounded-lg bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 transition shadow-lg"
+              disabled={sliceLoading}
+              className="px-6 py-2 rounded-lg bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-600 hover:to-slate-700 transition shadow-lg disabled:opacity-50"
             >
-              Save Draft
+              {isEditMode ? 'Save Changes' : 'Save Draft'}
             </button>
             <button
               type="button"
+              disabled={sliceLoading}
               onClick={(e) => onSubmit(e, true)}
-              className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-900 font-semibold shadow-xl"
+              className="px-6 py-2 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 hover:from-cyan-300 hover:to-blue-400 text-slate-900 font-semibold shadow-xl disabled:opacity-50"
             >
-              Save & Publish
+              {isEditMode ? 'Update & Publish' : 'Save & Publish'}
             </button>
           </div>
         </form>
+
+        {/* ✅ Manage Questions Section (Edit Mode Only) */}
+        {isEditMode && (
+          <motion.div
+            className="mt-10 pt-6 border-t border-white/20"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+          >
+            <h2 className="text-xl font-semibold mb-4 text-cyan-400">Manage Questions</h2>
+            <div className="grid grid-cols-2 gap-5">
+              <button
+                onClick={() => navigate(`/admin/mocktests/${id}/new/questions`)}
+                className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/20 hover:border-cyan-400 p-6 rounded-xl cursor-pointer transition"
+              >
+                <FaPlusCircle size={30} className="text-cyan-400" />
+                <span className="text-white font-medium">Manage Questions</span>
+              </button>
+
+              <button
+                onClick={() => toast.info("Bulk Upload Coming Soon!")}
+                className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/20 hover:border-green-500 p-6 rounded-xl cursor-pointer transition"
+              >
+                <FaUpload size={30} className="text-green-500" />
+                <span className="text-white font-medium">Bulk Upload</span>
+              </button>
+            </div>
+          </motion.div>
+        )}
       </motion.div>
     </motion.div>
   );
 }
 
-/* --- 燥 Input components remain unchanged from last time --- */
+/* ------------------------ Small Input Components ------------------------ */
+
 function Input({ label, error, ...props }) {
   return (
     <label className="flex flex-col space-y-1">
@@ -485,7 +589,7 @@ function Input({ label, error, ...props }) {
           error ? "border-red-400" : "border-white/20"
         } rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${
           error ? "focus:ring-red-400" : "focus:ring-cyan-400"
-        } text-white placeholder-gray-400`}
+        } text-white placeholder-gray-400 disabled:opacity-50`}
       />
       {error && <span className="text-red-400 text-xs">{error}</span>}
     </label>

@@ -8,6 +8,7 @@ import fs from "fs";
 import csv from "csv-parser";
 import xlsx from "xlsx";
 
+
 export const getMocktestsByCategory = async (req, res) => {
   try {
     const { category } = req.query;
@@ -523,3 +524,138 @@ export const getMockTests = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
+// backend/controllers/mockTestController.js
+
+// (keep all other functions as-is)
+
+// ... (your existing formatPath helper function)
+const formatPath = (file) => {
+  if (!file || !file.path) {
+    return null;
+  }
+  return file.path.replace(/\\/g, '/');
+}
+
+// --- ✅ --- UPDATED CONTROLLER FUNCTION (with better logging) ---
+/* Create a single question in the global pool */
+export const createGlobalQuestion = async (req, res) => {
+  
+  // --- NEW: Log the incoming data ---
+  console.log('--- createGlobalQuestion ---');
+  console.log('BODY:', JSON.stringify(req.body, null, 2));
+  console.log('FILES:', req.files);
+  // --- End Log ---
+
+  try {
+    const {
+      questionType,
+      title,
+      correctManualAnswer,
+      marks,
+      negative,
+      difficulty,
+      category,
+      options: optionsJSON,
+      correct: correctJSON,
+    } = req.body;
+
+    const files = req.files || {};
+
+    // --- NEW: Check for required fields early ---
+    if (!title) {
+      return res.status(400).json({ message: 'Question text (title) is required.' });
+    }
+    if (!category) {
+      return res.status(400).json({ message: 'Subject (category) is required.' });
+    }
+    // --- End Check ---
+
+    const questionImageUrl = files.questionImage
+      ? formatPath(files.questionImage[0])
+      : null;
+
+    const newQuestionData = {
+      questionType,
+      title,
+      marks: Number(marks) || 1,
+      negative: Number(negative) || 0,
+      difficulty,
+      category,
+      questionImageUrl: questionImageUrl,
+    };
+
+    if (questionType === 'mcq') {
+      let options = JSON.parse(optionsJSON || '[]');
+      let correct = JSON.parse(correctJSON || '[]');
+
+      const finalOptions = options.map((opt, i) => {
+        const fileKey = `optionImage${i}`;
+        return {
+          text: opt.text,
+          imageUrl: files[fileKey] ? formatPath(files[fileKey][0]) : null,
+        };
+      });
+      
+      newQuestionData.options = finalOptions.filter(
+        (opt) => opt.text || opt.imageUrl
+      );
+      newQuestionData.correct = correct;
+
+      if (newQuestionData.options.length < 2) {
+        return res
+          .status(400)
+          .json({ message: 'MCQ questions must have at least 2 options.' });
+      }
+      if (newQuestionData.correct.length === 0) {
+        return res
+          .status(400)
+          .json({ message: 'MCQ questions must have at least 1 correct answer.' });
+      }
+    } else {
+      if (!correctManualAnswer) {
+        return res
+          .status(400)
+          .json({ message: 'Manual questions must have a correct answer.' });
+      }
+      newQuestionData.correctManualAnswer = correctManualAnswer;
+    }
+
+    const question = new Question(newQuestionData);
+    await question.save();
+
+    res.status(201).json(question);
+  } catch (err) {
+    // --- ✅ --- ENHANCED ERROR LOGGING ---
+    console.error('--- ERROR creating global question ---');
+
+    // Check for Mongoose Validation Errors
+    if (err.name === 'ValidationError') {
+      console.error('Validation Error Details:', JSON.stringify(err.errors, null, 2));
+      const messages = Object.values(err.errors).map(val => val.message);
+      return res.status(400).json({ 
+        message: 'Validation failed.', 
+        errors: messages 
+      });
+    }
+
+    // Log other errors
+    console.error('Error Stack:', err.stack || err.message);
+    
+    // Clean up uploaded files on error
+    if (req.files) {
+      Object.values(req.files).forEach(fileArray => {
+        if (Array.isArray(fileArray)) {
+          fileArray.forEach(file => fs.unlink(file.path, () => {})); // Use async unlink
+        }
+      });
+    }
+
+    res.status(500).json({
+      message: 'Failed to create question',
+      error: err.stack || err.message,
+    });
+    // --- ✅ --- END ENHANCED LOGGING ---
+  }
+};
+// --- ✅ --- END OF UPDATED FUNCTION ---

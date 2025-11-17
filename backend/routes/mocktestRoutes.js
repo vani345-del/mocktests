@@ -12,10 +12,11 @@ import {
   submitMockTest,
   getMockTests,
   getMocktestsByCategory,
+  createGlobalQuestion,
 } from "../controllers/mockTestController.js";
-// --- FIX: Renamed 'uploadSingle' to 'uploadFile' to match the middleware export ---
-import { uploadFile } from "../middleware/upload.js";
+// --- ✅ FIX: Import uploadQuestionImages here --
 import { isAuth } from "../middleware/isAuth.js";
+import { uploadFile, uploadQuestionImages } from "../middleware/upload.js";
 
 const router = express.Router();
 
@@ -36,6 +37,14 @@ router.post(
   // --- FIX: Using 'uploadFile' here as well ---
   uploadFile.single("file"),
   bulkUploadQuestions
+);
+
+// ✅ --- THIS ROUTE WILL NOW WORK ---
+router.post(
+  "/questions",
+  isAuth,
+  uploadQuestionImages, // Use the middleware you already defined!
+  createGlobalQuestion // Use the new controller function
 );
 
 // GET /api/admin/mocktests/:id

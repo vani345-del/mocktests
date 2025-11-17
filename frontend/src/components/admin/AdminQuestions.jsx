@@ -7,160 +7,195 @@ import toast from "react-hot-toast";
 import { FaArrowLeft, FaUpload } from "react-icons/fa";
 import { ClipLoader } from "react-spinners"; // Import a spinner
 
+// ✅ --- UPDATED INITIAL STATES ---
+const initialOption = { text: "", imageUrl: "" }; // imageUrl is for display only
+const initialFile = null;
+
+const initialFormState = {
+  questionType: "mcq",
+  title: "",
+  options: [
+    { ...initialOption },
+    { ...initialOption },
+    { ...initialOption },
+    { ...initialOption },
+    { ...initialOption }, // Match 5 options from your middleware
+  ],
+  correct: [],
+  correctManualAnswer: "",
+  marks: 1,
+  negative: 0,
+  difficulty: "easy",
+  category: "",
+};
+// --- END UPDATED STATES ---
+
 export default function AdminQuestions() {
-  const { id } = useParams(); 
+  const { id } = useParams();
   const [mocktest, setMocktest] = useState(null);
 
-  const [form, setForm] = useState({
-    questionType: "mcq",
-    questionImageUrl: "", // This will hold the URL from the server
-    title: "",
-    options: [
-      { text: "", imageUrl: "" },
-      { text: "", imageUrl: "" },
-      { text: "", imageUrl: "" },
-      { text: "", imageUrl: "" },
-    ],
-    correct: [], 
-    correctManualAnswer: "",
-    marks: 1,
-    negative: 0,
-    difficulty: "easy",
-    category: "", 
-  });
+  // ✅ --- SEPARATE STATE for form text and form files ---
+  const [form, setForm] = useState(initialFormState);
   
-  // --- NEW: State to hold the selected file for the question image ---
-  const [questionImageFile, setQuestionImageFile] = useState(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const [questionImageFile, setQuestionImageFile] = useState(initialFile);
+  const [optionImageFiles, setOptionImageFiles] = useState([
+    initialFile,
+    initialFile,
+    initialFile,
+    initialFile,
+    initialFile,
+  ]);
+  // --- END STATE ---
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bulkFile, setBulkFile] = useState(null); // Renamed from 'file'
 
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetch = async () => {
-      const res = await api.get(`api/admin/mocktests/${id}`);
-      setMocktest(res.data);
-      if (res.data?.subjects?.length === 1) {
-        setForm(f => ({ ...f, category: res.data.subjects[0].name }));
+      try {
+        const res = await api.get(`api/admin/mocktests/${id}`);
+        setMocktest(res.data);
+        if (res.data?.subjects?.length === 1) {
+          setForm((f) => ({ ...f, category: res.data.subjects[0].name }));
+        }
+      } catch (err) {
+        toast.error("Failed to load mock test data.");
       }
     };
     fetch();
   }, [id]);
 
-  const handleOptionChange = (i, field, val) => {
+  // ✅ --- UPDATED: Handler for option TEXT
+  const handleOptionTextChange = (i, val) => {
     const copy = [...form.options];
-    copy[i] = { ...copy[i], [field]: val };
+    copy[i] = { ...copy[i], text: val };
     setForm({ ...form, options: copy });
   };
   
+  // ✅ --- NEW: Handler for option FILES
+  const handleOptionFileChange = (i, file) => {
+    const copy = [...optionImageFiles];
+    copy[i] = file;
+    setOptionImageFiles(copy);
+  };
+
   const handleCorrectChange = (i) => {
-    setForm(f => {
+    setForm((f) => {
       const selected = f.correct.includes(i);
       let newCorrect;
       if (selected) {
-        newCorrect = f.correct.filter(idx => idx !== i);
+        newCorrect = f.correct.filter((idx) => idx !== i);
       } else {
-        newCorrect = [...f.correct, i].sort();
+        newCorrect = [...f.correct, i].sort((a, b) => a - b);
       }
       return { ...f, correct: newCorrect };
     });
   };
 
-  // --- NEW: Handler for uploading the question image ---
-  const handleQuestionImageUpload = async () => {
-    if (!questionImageFile) {
-      toast.error("Please select an image file first.");
-      return;
-    }
-
-    const fd = new FormData();
-    // 'image' must match the field name in uploadImage.single('image')
-    fd.append("image", questionImageFile); 
-    
-    setIsUploading(true);
-    const toastId = toast.loading("Uploading image...");
-
-    try {
-      // This route comes from your adminRoute.js, mounted at /api/admin/categories
-      const { data } = await api.post("/api/admin/categories/upload-image", fd, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
-
-      // Set the returned URL into the form state
-      setForm(f => ({ ...f, questionImageUrl: data.imageUrl }));
-      toast.success("Image uploaded!", { id: toastId });
-      setQuestionImageFile(null); // Clear the file input
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Image upload failed", { id: toastId });
-    } finally {
-      setIsUploading(false);
-    }
-  };
+  // ❌ --- REMOVED: handleQuestionImageUpload (no longer needed) ---
 
   const resetForm = () => {
     setForm({
-      questionType: "mcq",
-      questionImageUrl: "",
-      title: "",
-      options: [
-        { text: "", imageUrl: "" },
-        { text: "", imageUrl: "" },
-        { text: "", imageUrl: "" },
-        { text: "", imageUrl: "" },
-      ],
-      correct: [],
-      correctManualAnswer: "",
-      marks: 1,
-      negative: 0,
-      difficulty: "easy",
-      category: mocktest?.subjects?.length === 1 ? mocktest.subjects[0].name : "",
+      ...initialFormState,
+      category:
+        mocktest?.subjects?.length === 1 ? mocktest.subjects[0].name : "",
     });
-    // --- NEW: Reset the file input state ---
-    setQuestionImageFile(null);
+    // ✅ --- NEW: Reset file states ---
+    setQuestionImageFile(initialFile);
+    setOptionImageFiles([
+      initialFile,
+      initialFile,
+      initialFile,
+      initialFile,
+      initialFile,
+    ]);
+    // Clear file inputs
+    document.getElementById("question-image-input").value = null;
+    optionImageFiles.forEach((_, i) => {
+      document.getElementById(`option-image-input-${i}`).value = null;
+    });
   };
 
+  // ✅ --- FULLY REWRITTEN: onAddQuestion to use FormData ---
   const onAddQuestion = async (e) => {
     e.preventDefault();
-    
-    let data = { ...form };
-    if (data.questionType === 'mcq') {
-      data.options = data.options.filter(opt => opt.text || opt.imageUrl);
-      if (data.options.length < 2) {
-        toast.error("MCQ questions must have at least 2 options.");
-        return;
-      }
-      if (data.correct.length === 0) {
-        toast.error("MCQ questions must have at least 1 correct answer.");
-        return;
-      }
-    } else {
-      if (!data.correctManualAnswer) {
-        toast.error("Manual questions must have a correct answer.");
-        return;
-      }
+
+    if (!form.category) {
+      toast.error('Please select a subject.');
+      return;
     }
     
-    const toastId = toast.loading("Adding question...");
+    // 1. Create FormData
+    const fd = new FormData();
+
+    // 2. Append all text fields
+    fd.append('questionType', form.questionType);
+    fd.append('title', form.title);
+    fd.append('marks', form.marks);
+    fd.append('negative', form.negative);
+    fd.append('difficulty', form.difficulty);
+    fd.append('category', form.category);
+
+    // 3. Append main question image file
+    if (questionImageFile) {
+      fd.append('questionImage', questionImageFile);
+    }
+
+    // 4. Handle MCQ vs Manual data
+    if (form.questionType === 'mcq') {
+      // Send options text (without image data) as a JSON string
+      fd.append(
+        'options',
+        JSON.stringify(form.options.map((opt) => ({ text: opt.text })))
+      );
+      // Send correct answers as a JSON string
+      fd.append('correct', JSON.stringify(form.correct));
+
+      // Append option image files
+      optionImageFiles.forEach((file, i) => {
+        if (file) {
+          fd.append(`optionImage${i}`, file); // Key must match middleware
+        }
+      });
+    } else {
+      // Send manual answer
+      fd.append('correctManualAnswer', form.correctManualAnswer);
+    }
+    
+    // 5. Submit the form
+    setIsSubmitting(true);
+    const toastId = toast.loading("Adding question to pool...");
     try {
-      // This route is correct as per your component's comments
-      await api.post(`/api/admin/questions`, data);
+      // This route now matches your backend setup
+      await api.post(`/api/admin/mocktests/questions`, fd, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
       toast.success("Question added to global pool!", { id: toastId });
       resetForm();
     } catch (err) {
-       toast.error(err.response?.data?.message || "Failed to add question", { id: toastId });
+      toast.error(err.response?.data?.message || "Failed to add question", {
+        id: toastId,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
+  // ✅ --- END REWRITE ---
   
-  // (onBulkUpload function remains unchanged)
+  // (onBulkUpload function remains unchanged, but I fixed the state name)
   const onBulkUpload = async (e) => {
     e.preventDefault();
-    if (!file) {
+    if (!bulkFile) { // ✅ Use bulkFile
       toast.error("Please select a file");
       return;
     }
     const fd = new FormData();
-    fd.append("file", file);
+    fd.append("file", bulkFile); // ✅ Use bulkFile
 
     const toastId = toast.loading("Uploading questions...");
+    setIsSubmitting(true); // ✅ Disable form while bulk uploading
 
     try {
       // This route path is correct per your mockTestController
@@ -175,17 +210,18 @@ export default function AdminQuestions() {
         console.error("Bulk Upload Errors:", data.errors);
         toast.error(`Completed with ${data.errors.length} errors. Check console.`, { duration: 5000 });
       }
-      setFile(null);
+      setBulkFile(null); // ✅ Reset bulkFile
+      document.getElementById("bulk-file-input").value = null;
     } catch (err) {
       console.error("Bulk upload failed:", err);
       toast.error(
         err.response?.data?.message || "Bulk upload failed",
         { id: toastId }
       );
+    } finally {
+      setIsSubmitting(false); // ✅ Re-enable form
     }
   };
-  
-  const [file, setFile] = useState(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-10 text-white">
@@ -252,42 +288,17 @@ export default function AdminQuestions() {
             />
           </div>
           
-           {/* --- UPDATED: Question Image Upload Section --- */}
+           {/* --- ✅ UPDATED: Question Image Upload Section --- */}
           <div className="space-y-2">
             <label className="text-sm text-gray-300">Question Image (Optional)</label>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => setQuestionImageFile(e.target.files[0])}
-                className="file-input flex-1"
-              />
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                type="button" // Important: type="button" to not submit the form
-                onClick={handleQuestionImageUpload}
-                disabled={!questionImageFile || isUploading}
-                className="px-4 py-2 rounded-lg bg-cyan-500 text-slate-900 font-semibold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {isUploading ? (
-                  <ClipLoader size={20} color="#000" />
-                ) : (
-                  <FaUpload />
-                )}
-                {isUploading ? "Uploading..." : "Upload Image"}
-              </motion.button>
-            </div>
-            {/* Show the URL field once it's available */}
-            {form.questionImageUrl && (
-              <Input
-                label="Uploaded Image URL"
-                type="text"
-                value={form.questionImageUrl}
-                readOnly
-                disabled
-              />
-            )}
+            <input
+              id="question-image-input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => setQuestionImageFile(e.target.files[0])}
+              className="file-input w-full"
+            />
+            {/* ❌ REMOVED separate upload button and URL field */}
           </div>
           {/* --- END: Question Image Upload Section --- */}
 
@@ -304,7 +315,8 @@ export default function AdminQuestions() {
           {form.questionType === 'mcq' ? (
             <div>
               <p className="text-sm text-gray-300 mb-2">Options</p>
-              <div className="grid grid-cols-2 gap-3">
+              {/* ✅ UPDATED to grid-cols-1 on small screens */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {form.options.map((opt, i) => (
                   <div key={i} className="flex flex-col gap-2 p-3 bg-white/5 rounded-md">
                      <div className="flex items-center gap-2">
@@ -319,13 +331,19 @@ export default function AdminQuestions() {
                     <Input
                       placeholder={`Option ${String.fromCharCode(65 + i)} Text`}
                       value={opt.text}
-                      onChange={(e) => handleOptionChange(i, 'text', e.target.value)}
+                      onChange={(e) => handleOptionTextChange(i, e.target.value)}
                     />
-                    <Input
-                      placeholder={`Option ${String.fromCharCode(65 + i)} Image URL`}
-                      value={opt.imageUrl}
-                      onChange={(e) => handleOptionChange(i, 'imageUrl', e.target.value)}
+                    {/* ✅ --- NEW: File input for each option --- */}
+                    <input
+                      id={`option-image-input-${i}`}
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) =>
+                        handleOptionFileChange(i, e.target.files[0])
+                      }
+                      className="file-input w-full text-xs"
                     />
+                    {/* ❌ REMOVED image URL input field */}
                   </div>
                 ))}
               </div>
@@ -364,9 +382,10 @@ export default function AdminQuestions() {
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             type="submit"
-            className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-900 font-semibold shadow-lg hover:shadow-cyan-500/20 transition"
+            disabled={isSubmitting} // ✅ Use isSubmitting
+            className="w-full py-3 rounded-lg bg-gradient-to-r from-cyan-400 to-blue-500 text-slate-900 font-semibold shadow-lg hover:shadow-cyan-500/20 transition disabled:opacity-50"
           >
-            ➕ Add Question to Pool
+            {isSubmitting ? <ClipLoader size={22} color="#000" /> : '➕ Add Question to Pool'}
           </motion.button>
         </form>
 
@@ -381,27 +400,30 @@ export default function AdminQuestions() {
             Bulk Upload Questions
           </h3>
           <p className="text-sm text-gray-400 mb-4">
-            Upload CSV/XLSX with columns: <strong>questionType</strong> (mcq/manual), 
-            <strong>questionImageUrl</strong>, <strong>question</strong>, <strong>subject</strong>, <strong>level</strong>, 
-            <strong>optionA_text</strong>, <strong>optionA_image</strong>, 
-            <strong>optionB_text</strong>, <strong>optionB_image</strong>, ... (up to E),
-            <strong>correctIndex</strong> (e.g., "0" or "0,2"), <strong>correctManualAnswer</strong>,
-            <strong>marks</strong>, <strong>negative</strong>.
+            {/* ✅ --- UPDATED to match controller keys --- */}
+            Upload CSV/XLSX with columns: <strong>questiontype</strong> (mcq/manual), 
+            <strong>questionimageurl</strong>, <strong>question</strong>, <strong>subject</strong>, <strong>level</strong>, 
+            <strong>optiona_text</strong>, <strong>optiona_image</strong>, 
+            <strong>optionb_text</strong>, <strong>optionb_image</strong>, ... (up to e),
+            <strong>correctindex</strong> (e.g., "0" or "0,2"), <strong>correctmanualanswer</strong>,
+            <strong>marks</strong>, <strong>negative</strong>, <strong>tags</strong> (comma-separated).
           </p>
           <form onSubmit={onBulkUpload} className="flex flex-col md:flex-row gap-3">
             <input
+              id="bulk-file-input"
               type="file"
               accept=".csv, .xls, .xlsx"
-              onChange={(e) => setFile(e.target.files[0])}
+              onChange={(e) => setBulkFile(e.target.files[0])} // ✅ Use setBulkFile
               className="file-input flex-1"
             />
             <motion.button
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               type="submit"
-              className="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 font-semibold text-white shadow-lg"
+              disabled={isSubmitting} // ✅ Use isSubmitting
+              className="px-6 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 font-semibold text-white shadow-lg disabled:opacity-50"
             >
-              ⬆ Upload File
+              {isSubmitting ? <ClipLoader size={20} color="#FFF" /> : '⬆ Upload File'}
             </motion.button>
           </form>
         </motion.div>

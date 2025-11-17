@@ -50,9 +50,7 @@ export const getMocktestsByCategory = async (req, res) => {
   }
 };
 
-/* Create mocktest (Stage 1) 
-  This function is NOW CORRECT and does NOT reference importedQuestions
-*/
+/* Create mocktest (Stage 1) */
 export const createMockTest = async (req, res) => {
   try {
     let {
@@ -74,16 +72,21 @@ export const createMockTest = async (req, res) => {
     // Replace slug with ObjectId
     category = foundCategory._id;
 
+    // --- 燥 TRIM SUBJECT NAMES ---
     // subjects expected as JSON string from form — parse if needed
-    const parsedSubjects = typeof subjects === "string"
+    const parsedSubjects = (typeof subjects === "string"
       ? JSON.parse(subjects)
-      : subjects || [];
+      : subjects || []).map(s => ({
+        ...s,
+        name: s.name.trim() // Trim whitespace to ensure consistency
+      }));
+    // --- 漕 END TRIM ---
 
     const mt = new MockTest({
       category,
-      subcategory,
-      title,
-      description,
+      subcategory: subcategory.trim(), // Also trim other string inputs
+      title: title.trim(),
+      description: description.trim(),
       durationMinutes,
       totalQuestions,
       totalMarks,
@@ -91,7 +94,7 @@ export const createMockTest = async (req, res) => {
       price,
       discountPrice,
       isPublished: !!isPublished,
-      subjects: parsedSubjects,
+      subjects: parsedSubjects, // Use the trimmed subjects
       isGrandTest: !!isGrandTest,
       
       scheduledFor: (!!isGrandTest && scheduledFor) ? new Date(scheduledFor) : null
@@ -110,7 +113,7 @@ export const createMockTest = async (req, res) => {
 
 
 /* Get mocktest by id */
-// ... (Your other functions like addQuestion, bulkUploadQuestions, etc. remain unchanged) ...
+// ... (Your other functions like addQuestion, etc. remain unchanged) ...
 // ... (I am including them all below so you can copy-paste the whole file) ...
 
 
@@ -126,9 +129,16 @@ export const addQuestion = async (req, res) => {
     if (!mt) return res.status(404).json({ message: "MockTest not found" });
 
     const q = {
-      subject, level, questionText,
+      // --- 燥 TRIM SUBJECT, LEVEL, and TEXT ---
+      subject: subject.trim(), 
+      level: level.trim().toLowerCase(), // normalize level
+      questionText: questionText.trim(),
+      // --- 漕 END TRIM ---
       options: Array.isArray(options) ? options : JSON.parse(options),
-      correctAnswer, marks: Number(marks || 1), negativeMarks: Number(negativeMarks || 0), explanation
+      correctAnswer, 
+      marks: Number(marks || 1), 
+      negativeMarks: Number(negativeMarks || 0), 
+      explanation: explanation ? explanation.trim() : ""
     };
 
     mt.questions.push(q);
@@ -195,19 +205,28 @@ export const bulkUploadQuestions = async (req, res) => {
 
     for (const row of parsedRows) {
       const clean = {};
+      // Normalize headers to lowercase, remove spaces
       Object.keys(row).forEach((key) => {
         clean[key.replace(/\s+/g, "").toLowerCase()] = row[key];
       });
+
+      // --- 燥 TRIM ALL STRING VALUES ---
+      Object.keys(clean).forEach(key => {
+        if (typeof clean[key] === 'string') {
+          clean[key] = clean[key].trim();
+        }
+      });
+      // --- 漕 END TRIM ---
 
       const options = [
         clean.optiona,
         clean.optionb,
         clean.optionc,
         clean.optiond,
-      ].filter(Boolean);
+      ].filter(Boolean); // Filter out empty/null options
       
       if (!clean.question || !clean.subject || !clean.level || !clean.correctanswer || options.length < 2) {
-        errors.push({ row: row, error: "Missing required fields (Question, Subject, Level, CorrectAnswer, or Options)" });
+        errors.push({ row: row, error: "Missing required fields (Question, Subject, Level, CorrectAnswer, or at least 2 Options)" });
         continue;
       }
       
@@ -220,13 +239,13 @@ export const bulkUploadQuestions = async (req, res) => {
       }
       
       validQuestions.push({
-        title: clean.question,
+        title: clean.question, // Already trimmed
         options: options,
         correct: [correctIndex], // Save the index, not the text
         marks: Number(clean.marks) || 1,
-        negative: Number(clean.negative) || 0, // Add this if you have a 'Negative' column
-        difficulty: clean.level.toLowerCase(),
-        category: clean.subject, // 'category' on Question model maps to 'Subject' in CSV
+        negative: Number(clean.negative) || 0,
+        difficulty: clean.level.toLowerCase(), // Normalize level
+        category: clean.subject, // 'category' on Question model maps to 'Subject' in CSV (already trimmed)
         tags: [],
       });
     }

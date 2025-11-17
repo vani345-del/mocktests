@@ -12,8 +12,9 @@ export const fetchMockTestByIdForEdit = createAsyncThunk(
   async (id, { rejectWithValue }) => {
     try {
       const response = await api.get(`api/admin/mocktests/${id}`);
-      return response.data.mocktest; // Return the mocktest object
+      return response.data; // API returns the mocktest object directly
     } catch (err) {
+      // ✅ FIX: Always return a string message
       return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
@@ -27,7 +28,8 @@ export const createMockTest = createAsyncThunk(
       const res = await api.post("api/admin/mocktests", payload);
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -37,24 +39,15 @@ export const updateMockTest = createAsyncThunk(
   "mocktest/update",
   async (payload, { rejectWithValue }) => {
     try {
+      // ✅ FIX: Remove all name transformations.
+      // The backend (as per createMockTest) expects durationMinutes and negativeMarking.
+      // We just pass the payload directly.
       const { id, ...data } = payload;
-
-      // ✅ --- FIX: Transform data to match backend expectation for PUT route ---
-      const transformedData = {
-        ...data,
-        duration: data.durationMinutes, // Rename durationMinutes to duration
-        negativeMarks: data.negativeMarking, // Rename negativeMarking to negativeMarks
-      };
-
-      // Clean up the object to not send the old names
-      delete transformedData.durationMinutes;
-      delete transformedData.negativeMarking;
-      // --- END OF FIX ---
-
-      const res = await api.put(`api/admin/mocktests/${id}`, transformedData); // Send transformed data
+      const res = await api.put(`api/admin/mocktests/${id}`, data); // Send data as-is
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -67,7 +60,8 @@ export const addQuestion = createAsyncThunk(
       const res = await api.post(`api/admin/mocktests/${id}/questions`, data);
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -79,12 +73,18 @@ export const bulkUpload = createAsyncThunk(
     try {
       const form = new FormData();
       form.append("file", file);
-      const res = await api.post(`api/admin/mocktests/${id}/questions/bulk`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // ✅ Corrected route to match backend router
+      const res = await api.post(
+        `api/admin/mocktests/questions/bulk-upload`,
+        form,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -97,7 +97,8 @@ export const togglePublish = createAsyncThunk(
       const res = await api.put(`api/admin/mocktests/${id}/publish`);
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -110,7 +111,8 @@ export const deleteMockTest = createAsyncThunk(
       const res = await api.delete(`api/admin/mocktests/${id}`);
       return res.data;
     } catch (err) {
-      return rejectWithValue(err.response?.data || err.message);
+      // ✅ FIX: Always return a string message
+      return rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -124,12 +126,11 @@ export const fetchPublicMockTests = createAsyncThunk(
   async (query = "", { rejectWithValue }) => {
     try {
       const res = await api.get(`api/public/mocktests${query}`);
-      console.log("API /public/mocktests response:", res.data); // TEMP LOG - remove later
-      // res.data expected shape: { mocktests: [...], total: N }
       return res.data;
     } catch (err) {
-      console.error("fetchPublicMockTests error:", err.response?.data || err.message);
-      return rejectWithValue(err.response?.data?.message || "Failed to fetch mock tests");
+      return rejectWithValue(
+        err.response?.data?.message || "Failed to fetch mock tests"
+      );
     }
   }
 );
@@ -148,18 +149,21 @@ export const fetchPublicTestById = createAsyncThunk(
 
 // --- 👇 NEW LEADERBOARD THUNK ---
 export const fetchGrandTestLeaderboard = createAsyncThunk(
-  'mocktest/fetchGrandTestLeaderboard',
+  "mocktest/fetchGrandTestLeaderboard",
   async (mockTestId, { rejectWithValue }) => {
     try {
-      const response = await api.get(`/api/student/grandtest-leaderboard/${mockTestId}`);
+      const response = await api.get(
+        `/api/student/grandtest-leaderboard/${mockTestId}`
+      );
       return { mockTestId, data: response.data }; // Pass both ID and data
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch leaderboard');
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to fetch leaderboard"
+      );
     }
   }
 );
 // --- 👆 END OF NEW THUNK ---
-
 
 /* -----------------------------
    🧠 SLICE DEFINITION
@@ -178,9 +182,8 @@ const slice = createSlice({
     total: 0,
     publicStatus: "idle", // idle | loading | succeeded | failed
     publicError: null,
-    
+
     // --- 👇 NEW LEADERBOARD STATE ---
-    // We will store leaderboards in a map, keyed by mockTestId
     leaderboards: {}, // { "testId1": [...], "testId2": [...] }
     leaderboardStatus: "idle",
     leaderboardError: null,
@@ -188,8 +191,8 @@ const slice = createSlice({
 
     // --- State for single public test (details page) ---
     currentTest: null,
-    currentTestStatus: 'idle',
-    currentTestError: null
+    currentTestStatus: "idle",
+    currentTestError: null,
   },
 
   reducers: {},
@@ -209,7 +212,7 @@ const slice = createSlice({
       })
       .addCase(fetchMockTestByIdForEdit.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // create mocktest
@@ -223,7 +226,7 @@ const slice = createSlice({
       })
       .addCase(createMockTest.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // --- ✅ Update Mocktest ---
@@ -237,7 +240,7 @@ const slice = createSlice({
       })
       .addCase(updateMockTest.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // add question
@@ -250,7 +253,7 @@ const slice = createSlice({
       })
       .addCase(addQuestion.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // bulk upload
@@ -263,19 +266,22 @@ const slice = createSlice({
       })
       .addCase(bulkUpload.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // toggle publish
       .addCase(togglePublish.pending, (s) => {
         s.loading = true;
       })
-      .addCase(togglePublish.fulfilled, (s) => {
+      .addCase(togglePublish.fulfilled, (s, a) => {
         s.loading = false;
+        if (s.current && s.current._id === a.payload.mocktest?._id) {
+          s.current.isPublished = a.payload.mocktest.isPublished;
+        }
       })
       .addCase(togglePublish.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
 
       // delete
@@ -287,9 +293,9 @@ const slice = createSlice({
       })
       .addCase(deleteMockTest.rejected, (s, a) => {
         s.loading = false;
-        s.error = a.payload;
+        s.error = a.payload; // a.payload is now a string
       })
-       // --- New Handlers for Single Public Test ---
+      // --- New Handlers for Single Public Test ---
       .addCase(fetchPublicTestById.pending, (state) => {
         state.currentTestStatus = "loading";
         state.currentTest = null; // Clear old test
@@ -326,21 +332,21 @@ const slice = createSlice({
         state.publicStatus = "failed";
         state.publicError = action.payload;
       });
-      
+
     // --- 👇 NEW LEADERBOARD REDUCERS ---
     builder
       .addCase(fetchGrandTestLeaderboard.pending, (state) => {
-        state.leaderboardStatus = 'loading';
+        state.leaderboardStatus = "loading";
         state.leaderboardError = null;
       })
       .addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
-        state.leaderboardStatus = 'succeeded';
+        state.leaderboardStatus = "succeeded";
         // Save the leaderboard data against its test ID
         state.leaderboards[action.payload.mockTestId] = action.payload.data;
         state.leaderboardError = null;
       })
       .addCase(fetchGrandTestLeaderboard.rejected, (state, action) => {
-        state.leaderboardStatus = 'failed';
+        state.leaderboardStatus = "failed";
         state.leaderboardError = action.payload;
       });
     // --- 👆 END OF NEW REDUCERS ---

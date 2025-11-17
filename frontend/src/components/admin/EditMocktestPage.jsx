@@ -1,8 +1,9 @@
+// frontend/src/components/admin/EditMocktestPage.jsx
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa"; // 1. Import icon
+import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa"; 
 
 const EditMocktestPage = () => {
   const { id } = useParams();
@@ -15,13 +16,14 @@ const EditMocktestPage = () => {
     const fetchMocktest = async () => {
       try {
         const res = await axios.get(`${serverURL}api/admin/mocktests/${id}`);
-        setMocktest(res.data.mocktest);
+        // --- ✅ SOLUTION: Set mocktest to res.data, not res.data.mocktest ---
+        setMocktest(res.data); 
       } catch (err) {
         toast.error("Failed to load mocktest details");
       }
     };
     fetchMocktest();
-  }, [id]);
+  }, [id, serverURL]); // Added serverURL to dependency array
 
   const handleChange = (e) => {
     setMocktest({ ...mocktest, [e.target.name]: e.target.value });
@@ -30,6 +32,8 @@ const EditMocktestPage = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
+      // This assumes your backend accepts the 'mocktest' object directly
+      // with fields like 'duration' and 'negativeMarks'
       await axios.put(`${serverURL}api/admin/mocktests/${id}`, mocktest);
       toast.success("Mocktest updated successfully!");
       navigate(-1);
@@ -44,7 +48,6 @@ const EditMocktestPage = () => {
 
   return (
     <div className="p-6 max-w-3xl mx-auto">
-      {/* 2. Add Back button */}
       <button
         onClick={() => navigate(-1)}
         className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"

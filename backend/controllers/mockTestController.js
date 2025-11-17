@@ -245,6 +245,7 @@ export const bulkUploadQuestions = async (req, res) => {
 
     let parsedRows = [];
 
+    // Read file
     if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
@@ -266,64 +267,82 @@ export const bulkUploadQuestions = async (req, res) => {
 
     for (const row of parsedRows) {
       const clean = {};
-      // Normalize headers to lowercase, remove spaces
+      // Normalize headers to lowercase, remove spaces, and trim values
       Object.keys(row).forEach((key) => {
-        clean[key.replace(/\s+/g, "").toLowerCase()] = row[key];
+        const cleanKey = key.replace(/\s+/g, "").toLowerCase();
+        clean[cleanKey] = (typeof row[key] === 'string') ? row[key].trim() : row[key];
       });
 
-      // --- 燥 TRIM ALL STRING VALUES ---
-      Object.keys(clean).forEach((key) => {
-        if (typeof clean[key] === "string") {
-          clean[key] = clean[key].trim();
-        }
-      });
-      // --- 漕 END TRIM ---
+      const questionType = clean.questiontype === 'manual' ? 'manual' : 'mcq';
 
-      const options = [
-        clean.optiona,
-        clean.optionb,
-        clean.optionc,
-        clean.optiond,
-      ].filter(Boolean); // Filter out empty/null options
-
+      // --- Base validation ---
       if (
         !clean.question ||
         !clean.subject ||
-        !clean.level ||
-        !clean.correctanswer ||
-        options.length < 2
+        !clean.level
       ) {
         errors.push({
           row: row,
-          error:
-            "Missing required fields (Question, Subject, Level, CorrectAnswer, or at least 2 Options)",
+          error: "Missing required fields (Question, Subject, or Level)",
         });
         continue;
       }
-
-      // Find the index of the correct answer
-      const correctIndex = options.findIndex(
-        (opt) => opt === clean.correctanswer
-      );
-
-      if (correctIndex === -1) {
-        errors.push({
-          row: row,
-          error: `CorrectAnswer "${clean.correctanswer}" did not match any of the Option texts.`,
-        });
-        continue;
-      }
-
-      validQuestions.push({
-        title: clean.question, // Already trimmed
-        options: options,
-        correct: [correctIndex], // Save the index, not the text
+      
+      const newQuestion = {
+        title: clean.question,
+        questionType: questionType,
+        questionImageUrl: clean.questionimageurl || null,
+        category: clean.subject,
+        difficulty: clean.level.toLowerCase(),
         marks: Number(clean.marks) || 1,
         negative: Number(clean.negative) || 0,
-        difficulty: clean.level.toLowerCase(), // Normalize level
-        category: clean.subject, // 'category' on Question model maps to 'Subject' in CSV (already trimmed)
-        tags: [],
-      });
+        tags: clean.tags ? clean.tags.split(',').map(t => t.trim()) : [],
+      };
+
+      if (questionType === 'mcq') {
+        // --- MCQ Validation ---
+        const options = [
+          { text: clean.optiona_text, imageUrl: clean.optiona_image },
+          { text: clean.optionb_text, imageUrl: clean.optionb_image },
+          { text: clean.optionc_text, imageUrl: clean.optionc_image },
+          { text: clean.optiond_text, imageUrl: clean.optiond_image },
+          { text: clean.optione_text, imageUrl: clean.optione_image },
+        ].filter(opt => opt.text || opt.imageUrl); // Keep if it has text OR an image
+
+        if (options.length < 2) {
+           errors.push({ row: row, error: "MCQ questions must have at least 2 options (with text or image)." });
+           continue;
+        }
+        
+        if (clean.correctindex == null || clean.correctindex === '') { // Check for null or empty string
+           errors.push({ row: row, error: "MCQ questions must have a 'correctIndex' (e.g., 0)." });
+           continue;
+        }
+
+        // Support multiple correct answers, e.g., "0,2"
+        const correctIndexes = String(clean.correctindex)
+          .split(',')
+          .map(i => parseInt(i.trim(), 10))
+          .filter(i => !isNaN(i) && i >= 0 && i < options.length);
+          
+        if (correctIndexes.length === 0) {
+           errors.push({ row: row, error: `Invalid correctIndex '${clean.correctindex}'. Must be a number (or comma-separated numbers) corresponding to an option.` });
+           continue;
+        }
+        
+        newQuestion.options = options;
+        newQuestion.correct = correctIndexes;
+
+      } else {
+        // --- Manual Validation ---
+        if (!clean.correctmanualanswer) {
+          errors.push({ row: row, error: "Manual questions must have a 'correctManualAnswer'." });
+          continue;
+        }
+        newQuestion.correctManualAnswer = clean.correctmanualanswer;
+      }
+
+      validQuestions.push(newQuestion);
     }
 
     if (!validQuestions.length) {

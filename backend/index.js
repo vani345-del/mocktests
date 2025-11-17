@@ -6,6 +6,10 @@ import cors from "cors";
 import publicRoutes from "./routes/publicRoutes.js";
 import fs from "fs";
 
+// --- NEW: Imports for path and fileURLToPath ---
+import path from "path";
+import { fileURLToPath } from "url";
+
 // ✅ Import routes
 import authRouter from "./routes/authRoute.js";
 import mocktestRoutes from "./routes/mocktestRoutes.js";
@@ -23,6 +27,10 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT ;
 
+// --- NEW: Setup __dirname for ES modules ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 
 // ✅ Middleware setup
 app.use(
@@ -35,7 +43,9 @@ app.use(cookieParser());
 app.use(express.json());
 app.use("/api/auth", authRouter);
 
-app.use("/uploads", express.static("uploads"));
+// --- UPDATED: Statically serve the 'uploads' directory ---
+// This now correctly serves both /uploads and /uploads/images
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
  
 app.use("/api", publicRoutes);
 
@@ -44,8 +54,7 @@ app.use("/api/cart", cartRoute);
 app.use("/api/v1/dashboard", dashboardRoute);
 app.use('/api/admin', adminUserRoutes);
 
-// ✅ Static & API Routes
-
+// ✅ API Routes
 app.use("/api/admin/mocktests", mocktestRoutes);
 app.use("/api/student", studentRoute);
 app.use('/api/public/categories', categoryRoutes);

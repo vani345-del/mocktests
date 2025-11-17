@@ -5,22 +5,23 @@ import {
   getMockTestById,
   addQuestion,
   bulkUploadQuestions,
-  updateMockTest, // ✅ 1. Import the update function
+  updateMockTest,
   togglePublish,
   deleteMockTest,
   getPublishedMockTests,
   submitMockTest,
   getMockTests,
-  getMocktestsByCategory, // ✅ 2. Import this function
+  getMocktestsByCategory,
 } from "../controllers/mockTestController.js";
-import { uploadSingle } from "../middleware/upload.js";
+// --- FIX: Renamed 'uploadSingle' to 'uploadFile' to match the middleware export ---
+import { uploadFile } from "../middleware/upload.js";
 import { isAuth } from "../middleware/isAuth.js";
 
 const router = express.Router();
 
 // --- ADMIN ROUTES ---
 
-// ✅ 3. Re-ordered routes. Specific routes MUST come before general /:id routes.
+// Specific routes MUST come before general /:id routes.
 
 // POST /api/admin/mocktests
 router.post("/", createMockTest);
@@ -32,14 +33,15 @@ router.get("/", getMocktestsByCategory);
 router.post(
   "/questions/bulk-upload",
   isAuth,
-  uploadSingle.single("file"),
+  // --- FIX: Using 'uploadFile' here as well ---
+  uploadFile.single("file"),
   bulkUploadQuestions
 );
 
 // GET /api/admin/mocktests/:id
 router.get("/:id", getMockTestById);
 
-// ✅ 4. ADDED THE PUT ROUTE for updates
+// PUT /api/admin/mocktests/:id
 router.put("/:id", updateMockTest);
 
 // DELETE /api/admin/mocktests/:id

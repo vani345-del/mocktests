@@ -1,3 +1,4 @@
+// frontend/src/pages/student/WriteMocktest.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import api from '../../api/axios';
@@ -33,8 +34,7 @@ const Timer = ({ expiryTimestamp, onTimeUp }) => {
   );
 };
 
-// --- NEW: Submission Result Modal Component ---
-// This component will be rendered on top of the page when the test is submitted.
+// --- (No changes to SubmissionResultModal component) ---
 const SubmissionResultModal = ({ result, onClose }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm">
@@ -59,7 +59,6 @@ const SubmissionResultModal = ({ result, onClose }) => {
           </div>
 
           {/* Subject-wise Scores */}
-          {/* This section will only appear if your API returns the 'subjectWiseScores' array */}
           {result.subjectWiseScores && result.subjectWiseScores.length > 0 && (
             <div className="w-full mb-6">
               <h4 className="text-md font-semibold text-gray-700 mb-3">Subject Breakdown:</h4>
@@ -87,7 +86,6 @@ const SubmissionResultModal = ({ result, onClose }) => {
   );
 };
 
-
 // --- Main Exam Component (Modified) ---
 const WriteMocktest = () => {
   const { attemptId } = useParams();
@@ -99,28 +97,25 @@ const WriteMocktest = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [selectedSubject, setSelectedSubject] = useState('all');
   
+  // --- UPDATED: New answers state structure ---
   const [answers, setAnswers] = useState({});
+  // Example: { "q_id_1": { selected: [0], manual: null }, "q_id_2": { selected: null, manual: "typed answer" } }
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // --- NEW: State for modal ---
   const [showResultModal, setShowResultModal] = useState(false);
   const [submissionResult, setSubmissionResult] = useState(null);
 
-  // Fetch the attempt details (which includes the questions)
   useEffect(() => {
     const fetchAttempt = async () => {
       try {
          const { data } = await api.get(`/api/student/attempt/${attemptId}`); 
          setAttempt(data);
+         // --- UPDATED: Pre-fill answers from the attempt document ---
          if (data.answers) {
-           const saved = {};
-           data.answers.forEach(a => {
-             saved[a.questionId] = a.selectedAnswer;
-           });
-           setAnswers(saved);
+           setAnswers(data.answers);
          }
       } catch (err) {
-        toast.error('Could not load test. ' + err.response?.data?.message);
+        toast.error('Could not load test. ' + (err.response?.data?.message || err.message));
         navigate('/student-dashboard');
       } finally {
         setLoading(false);
@@ -146,63 +141,77 @@ const WriteMocktest = () => {
 
   const currentQuestion = filteredQuestions[currentQuestionIndex];
 
-  // --- (No changes to handleSelectOption) ---
-  const handleSelectOption = (questionId, optionText) => {
-    setAnswers(prev => ({
-      ...prev,
-      [questionId]: optionText
-    }));
+  // --- UPDATED: Universal answer handler ---
+  const handleAnswerChange = (questionId, questionType, value) => {
+    setAnswers(prev => {
+      const newAnswer = { ...prev[questionId] };
+      
+      if (questionType === 'mcq') {
+        // --- This now supports MULTIPLE correct answers (checkbox-style) ---
+        // If your schema's `correct` array only ever has one item,
+        // you can change this to be a simple assignment: `newAnswer.selected = [value]`
+        const currentIndex = (newAnswer.selected || []).indexOf(value);
+        if (currentIndex > -1) {
+          // Deselect
+          newAnswer.selected = newAnswer.selected.filter(i => i !== value);
+        } else {
+          // Select
+          newAnswer.selected = [...(newAnswer.selected || []), value];
+        }
+        newAnswer.manual = null; // Ensure manual is null
+        
+      } else if (questionType === 'manual') {
+        newAnswer.manual = value; // `value` is the text from the textarea
+        newAnswer.selected = null; // Ensure selected is null
+      }
+
+      return {
+        ...prev,
+        [questionId]: newAnswer
+      };
+    });
   };
 
-  // --- MODIFIED: handleSubmit ---
+  // --- UPDATED: handleSubmit to send new payload ---
   const handleSubmit = async () => {
     if (isSubmitting) return;
     
     const confirm = window.confirm("Are you sure you want to submit?");
     if (!confirm) {
-      return; // User cancelled
+      return; 
     }
 
     setIsSubmitting(true);
     const toastId = toast.loading("Submitting your test...");
     
+    // --- UPDATED: New payload format ---
+    // We just send the entire 'answers' object.
+    // The backend endpoint /api/student/submit-test/ must be updated
+    // to receive this object and save it to the Attempt's 'answers' field.
     const payload = {
-      answers: Object.keys(answers).map(qId => ({
-        questionId: qId,
-        selectedAnswer: answers[qId]
-      }))
+      answers: answers
     };
 
     try {
+      // This endpoint now receives the new payload, calculates the score,
+      // and saves the 'answers' object to the Attempt document.
       const { data } = await api.post(`/api/student/submit-test/${attemptId}`, payload);
       
-      // --- NEW LOGIC ---
-      toast.dismiss(toastId); // Close the loading toast
-      
-      // *** IMPORTANT ***
-      // For subject-wise scores, your API must return a 'subjectWiseScores' array in the response.
-      // Example `data` object: { score: 80, total: 100, subjectWiseScores: [...] }
+      toast.dismiss(toastId); 
       setSubmissionResult(data); 
-      setShowResultModal(true); // Show the success modal
+      setShowResultModal(true); 
       
-      // We no longer navigate from here or show the simple toast.
-      // navigate(`/student/results/${attemptId}`);
-      // toast.success(`Test Submitted! Your Score: ${data.score}/${data.total}`, { id: toastId, duration: 5000 });
-
     } catch (err) {
       toast.error(err.response?.data?.message || "Submission failed", { id: toastId });
-      setIsSubmitting(false); // Only set submitting to false on failure
+      setIsSubmitting(false);
     }
   };
   
-  // --- MODIFIED: handleTimeUp ---
   const handleTimeUp = () => {
-    // This function will now also trigger the modal via handleSubmit
     toast.error("Time's up! Submitting your test automatically.", { duration: 3000 });
     handleSubmit();
   };
 
-  // --- (No changes to loading spinner) ---
   if (loading || !attempt) {
     return (
       <div className="flex justify-center items-center h-[80vh]">
@@ -214,10 +223,9 @@ const WriteMocktest = () => {
   const endsAt = attempt.endsAt;
 
   return (
-    // --- NEW: Added React.Fragment to wrap modal and main content ---
     <>
       <div className="flex h-[calc(100vh-80px)] mt-10">
-        {/* Subject Sidebar */}
+        {/* Subject Sidebar (No changes) */}
         <div className="w-1/5 bg-gray-50 border-r border-gray-200 p-4 overflow-y-auto">
           <h2 className="text-lg font-semibold mb-4">Subjects</h2>
           <ul className="space-y-2">
@@ -243,7 +251,7 @@ const WriteMocktest = () => {
 
         {/* Main Content */}
         <div className="w-4/5 flex flex-col">
-          {/* Header */}
+          {/* Header (No changes) */}
           <div className="flex justify-between items-center p-4 bg-white border-b border-gray-200 shadow-sm">
             <h1 className="text-xl font-bold text-gray-800">{attempt.mocktestId.title || 'Mock Test'}</h1>
             <div className="flex items-center space-x-4">
@@ -275,41 +283,85 @@ const WriteMocktest = () => {
                   </span>
                 </div>
                 
+                {/* --- NEW: Render Question Image --- */}
+                {currentQuestion.questionImageUrl && (
+                  <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
+                    <img 
+                      src={currentQuestion.questionImageUrl} 
+                      alt="Question content" 
+                      className="w-full h-auto object-contain"
+                    />
+                  </div>
+                )}
+                
                 <p className="text-gray-800 text-base mb-6" style={{ whiteSpace: 'pre-wrap' }}>
                   {currentQuestion.title}
                 </p>
 
-                {/* Options */}
-                <div className="space-y-3">
-                  {currentQuestion.options.map((option, index) => {
-                    const isSelected = answers[currentQuestion._id] === option;
-                    return (
-                      <button
-                        key={index}
-                        onClick={() => handleSelectOption(currentQuestion._id, option)}
-                        className={`block w-full text-left p-4 rounded-lg border-2 transition-all
-                          ${
-                            isSelected
-                              ? 'bg-blue-100 border-blue-500 shadow'
-                              : 'bg-white border-gray-200 hover:bg-gray-50'
-                          }
-                        `}
-                      >
-                        <span className={`font-mono mr-3 ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}>
-                          {String.fromCharCode(65 + index)}.
-                        </span>
-                        <span className={`${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>
-                          {option}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
+                {/* --- UPDATED: Conditional Answer Area --- */}
+                {currentQuestion.questionType === 'mcq' ? (
+                  <div className="space-y-3">
+                    {currentQuestion.options.map((option, index) => {
+                      // --- UPDATED: Check if index is in the 'selected' array ---
+                      const isSelected = (answers[currentQuestion._id]?.selected || []).includes(index);
+                      return (
+                        <button
+                          key={index}
+                          // --- UPDATED: Send index and 'mcq' type ---
+                          onClick={() => handleAnswerChange(currentQuestion._id, 'mcq', index)}
+                          className={`block w-full text-left p-4 rounded-lg border-2 transition-all
+                            ${
+                              isSelected
+                                ? 'bg-blue-100 border-blue-500 shadow'
+                                : 'bg-white border-gray-200 hover:bg-gray-50'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center">
+                            <span className={`font-mono mr-3 ${isSelected ? 'text-blue-700' : 'text-gray-500'}`}>
+                              {String.fromCharCode(65 + index)}.
+                            </span>
+                            
+                            {/* --- NEW: Render option image and/or text --- */}
+                            {option.imageUrl && (
+                              <img 
+                                src={option.imageUrl} 
+                                alt={`Option ${String.fromCharCode(65 + index)}`} 
+                                className="h-20 w-auto mr-3 border border-gray-300 rounded-md"
+                              />
+                            )}
+                            {option.text && (
+                              <span className={`${isSelected ? 'text-blue-800' : 'text-gray-800'}`}>
+                                {option.text}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  // --- NEW: Render Manual Answer Textarea ---
+                  <div>
+                    <label htmlFor="manualAnswer" className="block text-sm font-medium text-gray-700 mb-2">
+                      Your Answer:
+                    </label>
+                    <textarea
+                      id="manualAnswer"
+                      rows={4}
+                      className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Type your answer here..."
+                      value={answers[currentQuestion._id]?.manual || ''}
+                      onChange={(e) => handleAnswerChange(currentQuestion._id, 'manual', e.target.value)}
+                    />
+                  </div>
+                )}
+                
               </div>
             )}
           </div>
 
-          {/* Navigation Footer */}
+          {/* Navigation Footer (No changes) */}
           <div className="flex justify-between p-4 bg-white border-t border-gray-200">
             <button
               onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
@@ -329,13 +381,12 @@ const WriteMocktest = () => {
         </div>
       </div>
 
-      {/* --- NEW: Conditional rendering of the result modal --- */}
+      {/* --- (No changes to modal rendering) --- */}
       {showResultModal && submissionResult && (
         <SubmissionResultModal
           result={submissionResult}
           onClose={() => {
             setShowResultModal(false);
-            // As requested, navigate to the student dashboard.
             navigate('/student-dashboard'); 
           }}
         />

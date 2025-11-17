@@ -19,7 +19,7 @@ export default function CategoryPage() {
   const { category } = useParams();
   const navigate = useNavigate();
   const [mocktests, setMocktests] = useState([]);
-  const [showForm, setShowForm] = useState(false);
+  
 
   const getMocktests = async () => {
     try {
@@ -74,12 +74,12 @@ export default function CategoryPage() {
             Mocktests
           </span>
         </h1>
-        <button
-          onClick={() => setShowForm(true)}
+       <Link
+          to={`/admin/categories/${category}/new`} // This is the new page route
           className="mt-5 sm:mt-0 flex items-center gap-2 px-5 py-3 rounded-lg text-white font-semibold bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90 shadow-lg transition-all"
         >
           <FaPlus /> Create Mocktest
-        </button>
+        </Link>
       </div>
 
       {/* Mocktest Cards */}
@@ -215,13 +215,7 @@ export default function CategoryPage() {
       </AnimatePresence>
 
       {/* Modal Form */}
-      {showForm && (
-        <FormMocktest
-          category={category}
-          onClose={() => setShowForm(false)}
-          onSuccess={getMocktests}
-        />
-      )}
+      
     </div>
   );
 }

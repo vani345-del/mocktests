@@ -26,6 +26,7 @@ import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
 import { Toaster } from 'react-hot-toast';
 import InstructionsPage from "./pages/student/InstructionsPage";
+import CreateMocktestPage from "./components/admin/CreateMocktestPage";
 
 // Import the student dashboard
 import StuDashboard from "./pages/student/StuDashboard"; 
@@ -152,7 +153,11 @@ const App = () => {
              <Route path="/admin/mocktests" element={<ManageMocktests />} />
             <Route path="/admin/mocktests/:category" element={<CategoryPage />} />
             <Route path="/admin/mocktests/:category/edit/:id" element={<EditMocktestPage />} />
-            <Route path="/admin/mocktests/:id/questions" element={<AdminQuestions />} />
+            <Route path="/admin/mocktests/:id/new/questions" element={<AdminQuestions />} />
+            <Route 
+    path="/admin/categories/:category/new" 
+    element={<CreateMocktestPage />} 
+  />
           </Route>
 
           {/* Fallback */}

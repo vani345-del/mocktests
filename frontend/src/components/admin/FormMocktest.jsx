@@ -68,7 +68,7 @@ export default function FormMocktest() {
       const resultAction = await dispatch(createMockTest(payload));
       if (createMockTest.fulfilled.match(resultAction)) {
         const id = resultAction.payload._id;
-        navigate(`/admin/mocktests/${id}/questions`);
+        navigate(`/admin/mocktests/${id}/new/questions`);
 
       }
     } catch (err) {

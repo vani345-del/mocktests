@@ -117,7 +117,50 @@ export const fetchGrandTestLeaderboard = createAsyncThunk(
   }
 );
 // --- 👆 END OF NEW THUNK ---
+export const getMockTestById = createAsyncThunk(
+  "mockTests/getMockTestById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const { data } = await api.get(`/mocktests/${id}`);
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || "Error fetching test");
+    }
+  }
+);
 
+// --- 燥 NEW THUNK to update a test ---
+export const updateMockTest = createAsyncThunk(
+  "mockTests/updateMockTest",
+  async (testData, { rejectWithValue }) => {
+    try {
+      const { id, ...payload } = testData;
+      // Note: Your backend route for updating might be PUT /mocktests/:id
+      // Please ensure this matches your backend API routes
+      const { data } = await api.put(`/mocktests/${id}`, payload); 
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || "Error updating test");
+    }
+  }
+);
+export const getMocktestsByCategory = createAsyncThunk(
+  "mockTests/getMocktestsByCategory",
+  async (category, { rejectWithValue }) => {
+    try {
+      // Make sure your backend route matches this.
+      // Based on your backend controller, the route is '/mocktests?category=...'
+      // Or if you have a specific route '/mocktests/category/:category'
+      
+      // Let's use the /mocktests/category/:category route you might have
+      // If not, change this to: `/mocktests?category=${category}`
+      const { data } = await api.get(`/mocktests/category/${category}`);
+      return data;
+    } catch (err) {
+      return rejectWithValue(err.response?.data || "Error fetching tests");
+    }
+  }
+);
 
 /* -----------------------------
    🧠 SLICE DEFINITION
@@ -129,6 +172,8 @@ const slice = createSlice({
     current: null, // current selected mocktest (admin)
     loading: false,
     error: null,
+    currentMockTest: null,
+    
 
     // ✅ public (student side)
     publicMocktests: [],
@@ -145,23 +190,71 @@ const slice = createSlice({
     // --- 👆 END OF NEW STATE ---
   },
 
-  reducers: {},
+  reducers: {
+    clearCurrentMockTest: (state) => {
+      state.currentMockTest = null;
+    },
+  },
 
   extraReducers: (builder) => {
     /* ---------- ADMIN ---------- */
     builder
+
+
+      .addCase(getMocktestsByCategory.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(getMocktestsByCategory.fulfilled, (state, action) => {
+        state.loading = false;
+        state.mocktests = action.payload;
+      })
+      .addCase(getMocktestsByCategory.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
       // create mocktest
-      .addCase(createMockTest.pending, (s) => {
-        s.loading = true;
-        s.error = null;
+      .addCase(createMockTest.pending, (state) => {
+        state.loading = true;
       })
-      .addCase(createMockTest.fulfilled, (s, a) => {
-        s.loading = false;
-        s.current = a.payload;
+      .addCase(createMockTest.fulfilled, (state, action) => {
+        state.loading = false;
+        state.mocktests.unshift(action.payload); // Add to list
       })
-      .addCase(createMockTest.rejected, (s, a) => {
-        s.loading = false;
-        s.error = a.payload;
+      .addCase(createMockTest.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      .addCase(getMockTestById.pending, (state) => {
+        state.loading = true;
+        state.currentMockTest = null;
+        state.error = null;
+      })
+      .addCase(getMockTestById.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentMockTest = action.payload;
+      })
+      .addCase(getMockTestById.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      }).addCase(updateMockTest.pending, (state) => {
+        state.loading = true;
+      })
+      .addCase(updateMockTest.fulfilled, (state, action) => {
+        state.loading = false;
+        state.currentMockTest = action.payload;
+        // Also update the test in the main list
+        const index = state.mocktests.findIndex(
+          (t) => t._id === action.payload._id
+        );
+        if (index !== -1) {
+          state.mocktests[index] = action.payload;
+        }
+      })
+      .addCase(updateMockTest.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       })
 
       // add question
@@ -268,6 +361,8 @@ const slice = createSlice({
         state.leaderboardError = action.payload;
       });
     // --- 👆 END OF NEW REDUCERS ---
+      
+
   },
 });
 

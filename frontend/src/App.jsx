@@ -157,7 +157,9 @@ const App = () => {
             <Route 
     path="/admin/categories/:category/new" 
     element={<CreateMocktestPage />} 
+
   />
+  
           </Route>
 
           {/* Fallback */}

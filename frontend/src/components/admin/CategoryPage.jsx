@@ -13,12 +13,16 @@ import { useParams, useNavigate, Link } from "react-router-dom"; // 2. Import Li
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import api from "../../api/axios";
+import { ClipLoader } from "react-spinners"; // Or any loader
 import FormMocktest from "./FormMocktest";
 
 export default function CategoryPage() {
   const { category } = useParams();
   const navigate = useNavigate();
   const [mocktests, setMocktests] = useState([]);
+
+
+  
   
 
   const getMocktests = async () => {

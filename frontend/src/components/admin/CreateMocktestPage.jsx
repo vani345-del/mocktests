@@ -1,53 +1,46 @@
+// frontend/src/components/admin/CreateMocktestPage.jsx
 import React from "react";
+import { useDispatch } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
-import FormMocktest from "./FormMocktest"; // Your existing form component
-import { FaArrowLeft } from "react-icons/fa";
+import { createMockTest } from "../../redux/mockTestSlice";
+import FormMocktest from "./FormMocktest";
 
-// This is the new page component that wraps your form
 export default function CreateMocktestPage() {
-  const { category } = useParams();
+  const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { category } = useParams();
 
-  // "onClose" now means "go back"
-  const handleClose = () => {
-    navigate(-1); // Go back to the previous page
+  const handleCreateTest = async (payload, publish) => {
+    // This is the logic that used to be inside FormMocktest
+    try {
+      const resultAction = await dispatch(
+        createMockTest({ ...payload, isPublished: publish })
+      );
+      if (createMockTest.fulfilled.match(resultAction)) {
+        const id = resultAction.payload._id;
+        // Navigate to the "add questions" page for the new test
+        navigate(`/admin/mocktests/${id}/new/questions`); 
+      } else {
+        const errorMsg = resultAction.payload?.message || "Failed to create mock test";
+        alert(errorMsg);
+        // Re-throw to be caught by FormMocktest's internal handler
+        throw new Error(errorMsg);
+      }
+    } catch (err) {
+      console.error(err);
+      // Re-throw to be caught by FormMocktest's internal handler
+      throw err;
+    }
   };
 
-  // "onSuccess" now means "go back to the category page"
-  const handleSuccess = () => {
-    // Navigate back to the category list. That page will
-    // automatically refresh the list because of its useEffect.
-    navigate(`/admin/categories/${category}`);
-  };
+  // Pass the category from the URL as part of the initialData
+  const initialData = { category: category };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-white to-slate-200 px-6 py-10">
-      {/* Back button */}
-      <button
-        onClick={handleClose}
-        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
-      >
-        <FaArrowLeft />
-        Back to {category} Mocktests
-      </button>
-
-      {/* Page Header */}
-      <h1 className="text-4xl font-bold text-gray-800 capitalize tracking-tight mb-10">
-        Create New Mocktest in{" "}
-        <span className="bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
-          {category}
-        </span>
-      </h1>
-
-      {/* Here is your existing FormMocktest component.
-        We changed no code inside it. We just placed it on this new page
-        and gave it new functions for onClose and onSuccess.
-      */}
-      <FormMocktest
-        category={category}
-        onClose={handleClose}
-        onSuccess={handleSuccess}
-      />
-    </div>
+    <FormMocktest
+      formTitle="Create Mock Test"
+      onSubmitHandler={handleCreateTest}
+      initialData={initialData}
+    />
   );
 }

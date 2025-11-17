@@ -1,7 +1,7 @@
 import express from "express";
 import { createCategory } from "../controllers/addCatAdmin.js";
 //import { uploadFile } from "../middleware/upload.js"; //
-import { uploadImage } from '../middleware/upload.js'; 
+import { uploadImage } from '../middleware/upload.js';
  // ✅ Correct import
 
 const router = express.Router();

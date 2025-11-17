@@ -3,20 +3,17 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import api from "../../api/axios";
-// --- UPDATED --- We no longer dispatch to the mockTestSlice for adding a question
-// import { useDispatch } from "react-redux";
-// import { addQuestion } from "../../redux/mockTestSlice";
 import toast from "react-hot-toast";
-import { FaArrowLeft } from "react-icons/fa";
+import { FaArrowLeft, FaUpload } from "react-icons/fa";
+import { ClipLoader } from "react-spinners"; // Import a spinner
 
 export default function AdminQuestions() {
-  const { id } = useParams(); // Still used to get mocktest info (like subjects)
+  const { id } = useParams(); 
   const [mocktest, setMocktest] = useState(null);
-  
-  // --- UPDATED: New form state to match the Question model ---
+
   const [form, setForm] = useState({
     questionType: "mcq",
-    questionImageUrl: "",
+    questionImageUrl: "", // This will hold the URL from the server
     title: "",
     options: [
       { text: "", imageUrl: "" },
@@ -24,23 +21,24 @@ export default function AdminQuestions() {
       { text: "", imageUrl: "" },
       { text: "", imageUrl: "" },
     ],
-    correct: [], // Array of indexes
+    correct: [], 
     correctManualAnswer: "",
     marks: 1,
     negative: 0,
     difficulty: "easy",
-    category: "", // This is the 'subject'
+    category: "", 
   });
   
-  const [file, setFile] = useState(null);
-  // const dispatch = useDispatch(); // No longer needed for single add
+  // --- NEW: State to hold the selected file for the question image ---
+  const [questionImageFile, setQuestionImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const navigate = useNavigate();
 
   useEffect(() => {
     const fetch = async () => {
       const res = await api.get(`api/admin/mocktests/${id}`);
       setMocktest(res.data);
-      // Pre-fill category if there's only one subject
       if (res.data?.subjects?.length === 1) {
         setForm(f => ({ ...f, category: res.data.subjects[0].name }));
       }
@@ -48,14 +46,12 @@ export default function AdminQuestions() {
     fetch();
   }, [id]);
 
-  // --- UPDATED: Handler for options (now objects) ---
   const handleOptionChange = (i, field, val) => {
     const copy = [...form.options];
     copy[i] = { ...copy[i], [field]: val };
     setForm({ ...form, options: copy });
   };
   
-  // --- UPDATED: Handler for correct (checkboxes) ---
   const handleCorrectChange = (i) => {
     setForm(f => {
       const selected = f.correct.includes(i);
@@ -67,6 +63,37 @@ export default function AdminQuestions() {
       }
       return { ...f, correct: newCorrect };
     });
+  };
+
+  // --- NEW: Handler for uploading the question image ---
+  const handleQuestionImageUpload = async () => {
+    if (!questionImageFile) {
+      toast.error("Please select an image file first.");
+      return;
+    }
+
+    const fd = new FormData();
+    // 'image' must match the field name in uploadImage.single('image')
+    fd.append("image", questionImageFile); 
+    
+    setIsUploading(true);
+    const toastId = toast.loading("Uploading image...");
+
+    try {
+      // This route comes from your adminRoute.js, mounted at /api/admin/categories
+      const { data } = await api.post("/api/admin/categories/upload-image", fd, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      // Set the returned URL into the form state
+      setForm(f => ({ ...f, questionImageUrl: data.imageUrl }));
+      toast.success("Image uploaded!", { id: toastId });
+      setQuestionImageFile(null); // Clear the file input
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Image upload failed", { id: toastId });
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const resetForm = () => {
@@ -87,9 +114,10 @@ export default function AdminQuestions() {
       difficulty: "easy",
       category: mocktest?.subjects?.length === 1 ? mocktest.subjects[0].name : "",
     });
+    // --- NEW: Reset the file input state ---
+    setQuestionImageFile(null);
   };
 
-  // --- UPDATED: This now creates a new question in the global 'questions' collection ---
   const onAddQuestion = async (e) => {
     e.preventDefault();
     
@@ -113,28 +141,16 @@ export default function AdminQuestions() {
     
     const toastId = toast.loading("Adding question...");
     try {
-      // This is a new, hypothetical route. You must add this to your backend.
-      // e.g., in adminRoutes.js: router.post('/questions', createQuestion);
-      // The controller would just be:
-      // export const createQuestion = async (req, res) => {
-      //   try {
-      //     const question = new Question(req.body);
-      //     await question.save();
-      //     res.status(201).json(question);
-      //   } catch (err) {
-      //     res.status(400).json({ message: err.message });
-      //   }
-      // }
+      // This route is correct as per your component's comments
       await api.post(`/api/admin/questions`, data);
       toast.success("Question added to global pool!", { id: toastId });
       resetForm();
-      // Note: This no longer auto-adds to the mocktest.
-      // You would need a separate UI to *build* a test from the global pool.
     } catch (err) {
        toast.error(err.response?.data?.message || "Failed to add question", { id: toastId });
     }
   };
-
+  
+  // (onBulkUpload function remains unchanged)
   const onBulkUpload = async (e) => {
     e.preventDefault();
     if (!file) {
@@ -147,8 +163,9 @@ export default function AdminQuestions() {
     const toastId = toast.loading("Uploading questions...");
 
     try {
+      // This route path is correct per your mockTestController
       const { data } = await api.post(
-        `/api/admin/mocktests/questions/bulk-upload`, // This route is correct
+        `/api/admin/mocktests/questions/bulk-upload`, 
         fd,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
@@ -167,6 +184,8 @@ export default function AdminQuestions() {
       );
     }
   };
+  
+  const [file, setFile] = useState(null);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-10 text-white">
@@ -233,15 +252,45 @@ export default function AdminQuestions() {
             />
           </div>
           
-           <Input
-            label="Question Image URL (optional)"
-            type="text"
-            placeholder="e.g., /uploads/images/my-graph.png"
-            value={form.questionImageUrl}
-            onChange={(e) =>
-              setForm({ ...form, questionImageUrl: e.target.value })
-            }
-          />
+           {/* --- UPDATED: Question Image Upload Section --- */}
+          <div className="space-y-2">
+            <label className="text-sm text-gray-300">Question Image (Optional)</label>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setQuestionImageFile(e.target.files[0])}
+                className="file-input flex-1"
+              />
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                type="button" // Important: type="button" to not submit the form
+                onClick={handleQuestionImageUpload}
+                disabled={!questionImageFile || isUploading}
+                className="px-4 py-2 rounded-lg bg-cyan-500 text-slate-900 font-semibold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isUploading ? (
+                  <ClipLoader size={20} color="#000" />
+                ) : (
+                  <FaUpload />
+                )}
+                {isUploading ? "Uploading..." : "Upload Image"}
+              </motion.button>
+            </div>
+            {/* Show the URL field once it's available */}
+            {form.questionImageUrl && (
+              <Input
+                label="Uploaded Image URL"
+                type="text"
+                value={form.questionImageUrl}
+                readOnly
+                disabled
+              />
+            )}
+          </div>
+          {/* --- END: Question Image Upload Section --- */}
+
 
           <Textarea
             label="Question Text"
@@ -252,7 +301,6 @@ export default function AdminQuestions() {
             }
           />
 
-          {/* --- UPDATED: Conditional Fields --- */}
           {form.questionType === 'mcq' ? (
             <div>
               <p className="text-sm text-gray-300 mb-2">Options</p>
@@ -333,7 +381,6 @@ export default function AdminQuestions() {
             Bulk Upload Questions
           </h3>
           <p className="text-sm text-gray-400 mb-4">
-            {/* --- UPDATED: New columns description --- */}
             Upload CSV/XLSX with columns: <strong>questionType</strong> (mcq/manual), 
             <strong>questionImageUrl</strong>, <strong>question</strong>, <strong>subject</strong>, <strong>level</strong>, 
             <strong>optionA_text</strong>, <strong>optionA_image</strong>, 
@@ -359,9 +406,6 @@ export default function AdminQuestions() {
           </form>
         </motion.div>
         
-        {/* --- REMOVED: Existing Questions list --- */}
-        {/* This list was for questions *embedded* in the mocktest, which is no longer the flow */}
-
       </motion.div>
     </div>
   );
@@ -374,7 +418,7 @@ const Input = ({ label, ...props }) => (
     {label && <span className="text-gray-300">{label}</span>}
     <input
       {...props}
-      className="bg-white/10 border border-white/20 rounded-md px-3 py-2 focus:ring-2 focus:ring-cyan-400 outline-none text-white placeholder-gray-400"
+      className="bg-white/10 border border-white/20 rounded-md px-3 py-2 focus:ring-2 focus:ring-cyan-400 outline-none text-white placeholder-gray-400 disabled:bg-white/5"
     />
   </label>
 );

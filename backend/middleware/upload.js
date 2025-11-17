@@ -1,6 +1,7 @@
 // backend/middleware/upload.js
 import multer from "multer";
 import path from "path";
+import fs from "fs"; // ✅ --- ADD THIS LINE ---
 
 // --- Storage for CSV/XLSX etc. ---
 const fileStorage = multer.diskStorage({

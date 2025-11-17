@@ -5,7 +5,7 @@ import {
   getMockTestById,
   addQuestion,
   bulkUploadQuestions,
-  updateMockTest, // ✅ 1. Import the new update function
+  updateMockTest, // ✅ 1. Import the update function
   togglePublish,
   deleteMockTest,
   getPublishedMockTests,
@@ -29,7 +29,6 @@ router.post("/", createMockTest);
 router.get("/", getMocktestsByCategory);
 
 // POST /api/admin/mocktests/questions/bulk-upload
-// Note: This route was changed to be more specific
 router.post(
   "/questions/bulk-upload",
   isAuth,
@@ -40,7 +39,7 @@ router.post(
 // GET /api/admin/mocktests/:id
 router.get("/:id", getMockTestById);
 
-// ✅ 4. ADDED THE MISSING PUT ROUTE for updates
+// ✅ 4. ADDED THE PUT ROUTE for updates
 router.put("/:id", updateMockTest);
 
 // DELETE /api/admin/mocktests/:id
@@ -53,7 +52,6 @@ router.put("/:id/publish", togglePublish);
 router.post("/:id/questions", addQuestion);
 
 // --- STUDENT ROUTES ---
-// (These are loaded via a different path in index.js, but good to keep organized)
 router.get("/published/list", getPublishedMockTests);
 router.post("/:id/submit", submitMockTest);
 

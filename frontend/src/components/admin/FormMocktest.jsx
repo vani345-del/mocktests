@@ -52,23 +52,20 @@ export default function FormMocktest() {
     }
   }, [dispatch, id, isEditMode]);
 
-  // ✅ --- SOLUTION: Populate form when data loads in Edit Mode ---
+  // ✅ --- START OF FIX ---
   useEffect(() => {
     // Only run this if we are in edit mode AND data has arrived
     if (isEditMode && currentMocktest) {
-      // Map fetched backend data names to our form state names
       setForm({
         category: currentMocktest.category?.slug || category, // Use slug from populated category
         subcategory: currentMocktest.subcategory || "",
         title: currentMocktest.title || "",
         description: currentMocktest.description || "",
 
-        // --- THIS IS THE FIX ---
-        // Map backend 'duration' to form's 'durationMinutes'
-        durationMinutes: currentMocktest.duration?.toString() || "",
-        // Map backend 'negativeMarks' to form's 'negativeMarking'
-        negativeMarking: currentMocktest.negativeMarks?.toString() || "",
-        // --- END OF FIX ---
+        // ✅ FIX: Read the correct keys from the backend data
+        durationMinutes: currentMocktest.durationMinutes?.toString() || "",
+        negativeMarking: currentMocktest.negativeMarking?.toString() || "",
+        // ✅ END OF FIX
 
         totalQuestions: currentMocktest.totalQuestions || 0,
         totalMarks: currentMocktest.totalMarks?.toString() || "",
@@ -102,7 +99,7 @@ export default function FormMocktest() {
       );
     }
   }, [isEditMode, currentMocktest, category]);
-  // --- END OF SOLUTION EFFECT ---
+  // ✅ --- END OF FIX ---
 
   const handleSubjectChange = (i, key, value) => {
     const copy = [...subjects];
@@ -140,7 +137,7 @@ export default function FormMocktest() {
     else if (Number(totalMarks) <= 0)
       newErrors.totalMarks = "Total marks must be > 0.";
 
-    if (!negativeMarking.trim())
+    if (negativeMarking.trim() === "") // Allow 0, but not empty string
       newErrors.negativeMarking = "Negative marking is required.";
     else if (Number(negativeMarking) < 0)
       newErrors.negativeMarking = "Cannot be negative.";
@@ -151,7 +148,8 @@ export default function FormMocktest() {
     if (discountPrice.trim() && Number(discountPrice) < 0) {
       newErrors.discountPrice = "Cannot be negative.";
     } else if (
-      Number(discountPrice) > 0 &&
+      discountPrice.trim() && // Only validate if discountPrice is present
+      Number(price) > 0 && // And price is greater than 0
       Number(discountPrice) >= Number(price)
     ) {
       newErrors.discountPrice = "Must be less than price.";
@@ -217,6 +215,7 @@ export default function FormMocktest() {
     }));
 
     // This payload uses the form's state names (durationMinutes, negativeMarking)
+    // which now match the backend schema.
     const payload = {
       ...form,
       durationMinutes: Number(form.durationMinutes),
@@ -236,7 +235,6 @@ export default function FormMocktest() {
       if (isEditMode) {
         // --- UPDATE LOGIC ---
         toast.loading("Updating mock test...");
-        // The `updateMockTest` thunk will handle renaming properties
         resultAction = await dispatch(updateMockTest({ ...payload, id }));
 
         if (updateMockTest.fulfilled.match(resultAction)) {
@@ -245,8 +243,8 @@ export default function FormMocktest() {
           navigate(`/admin/mocktests/${payload.category}`);
         } else {
           toast.dismiss();
-          const errorMsg =
-            resultAction.payload?.message || "Failed to update mock test.";
+          // resultAction.payload is now a string (from the slice)
+          const errorMsg = resultAction.payload || "Failed to update mock test.";
           toast.error(errorMsg);
           setErrors({ form: errorMsg });
         }
@@ -262,8 +260,8 @@ export default function FormMocktest() {
           navigate(`/admin/mocktests/${newId}/new/questions`);
         } else {
           toast.dismiss();
-          const errorMsg =
-            resultAction.payload?.message || "Failed to create mock test.";
+          // resultAction.payload is now a string (from the slice)
+          const errorMsg = resultAction.payload || "Failed to create mock test.";
           toast.error(errorMsg);
           setErrors({ form: errorMsg });
         }
@@ -374,7 +372,7 @@ export default function FormMocktest() {
               type="number"
               name="durationMinutes" // This name matches the form state
               min="0"
-              value={form.durationMinutes} // Populated from currentMocktest.duration
+              value={form.durationMinutes} // Populated from currentMocktest.durationMinutes
               onChange={handleFormChange}
               error={errors.durationMinutes}
             />
@@ -392,7 +390,7 @@ export default function FormMocktest() {
               type="number"
               name="negativeMarking" // This name matches the form state
               step="0.01"
-              value={form.negativeMarking} // Populated from currentMocktest.negativeMarks
+              value={form.negativeMarking} // Populated from currentMocktest.negativeMarking
               onChange={handleFormChange}
               error={errors.negativeMarking}
             />

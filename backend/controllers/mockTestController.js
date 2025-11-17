@@ -34,8 +34,6 @@ export const getMocktestsByCategory = async (req, res) => {
         console.log("Category found by slug/name:", catDoc._id);
         filter.category = catDoc._id;
       } else {
-        // IMPORTANT: if no Category doc found, use categorySlug (string match)
-        // Do NOT set filter.category = category (that causes CastError).
         console.log("No category doc found — using categorySlug string match.");
         filter.categorySlug = category;
       }
@@ -66,7 +64,6 @@ export const createMockTest = async (req, res) => {
       discountPrice,
       isPublished,
       subjects,
-
       isGrandTest,
       scheduledFor,
     } = req.body;
@@ -80,19 +77,16 @@ export const createMockTest = async (req, res) => {
     // Replace slug with ObjectId
     category = foundCategory._id;
 
-    // --- 燥 TRIM SUBJECT NAMES ---
-    // subjects expected as JSON string from form — parse if needed
     const parsedSubjects = (
       typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
     ).map((s) => ({
       ...s,
-      name: s.name.trim(), // Trim whitespace to ensure consistency
+      name: s.name.trim(),
     }));
-    // --- 漕 END TRIM ---
 
     const mt = new MockTest({
       category,
-      subcategory: subcategory.trim(), // Also trim other string inputs
+      subcategory: subcategory.trim(),
       title: title.trim(),
       description: description.trim(),
       durationMinutes,
@@ -102,9 +96,8 @@ export const createMockTest = async (req, res) => {
       price,
       discountPrice,
       isPublished: !!isPublished,
-      subjects: parsedSubjects, // Use the trimmed subjects
+      subjects: parsedSubjects,
       isGrandTest: !!isGrandTest,
-
       scheduledFor:
         !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
     });
@@ -120,7 +113,7 @@ export const createMockTest = async (req, res) => {
   }
 };
 
-// ✅ --- START OF NEW/UPDATED FUNCTION ---
+// ✅ --- THIS IS THE UPDATE FUNCTION ---
 /* Update mocktest by id */
 export const updateMockTest = async (req, res) => {
   try {
@@ -128,18 +121,25 @@ export const updateMockTest = async (req, res) => {
     let updateData = req.body;
 
     // ✅ FIX: Convert category slug back to ObjectId before updating
-    if (updateData.category && !mongoose.Types.ObjectId.isValid(updateData.category)) {
-      const foundCategory = await Category.findOne({ slug: updateData.category });
+    if (
+      updateData.category &&
+      !mongoose.Types.ObjectId.isValid(updateData.category)
+    ) {
+      const foundCategory = await Category.findOne({
+        slug: updateData.category,
+      });
       if (!foundCategory) {
         return res.status(400).json({ message: "Invalid category slug" });
       }
       updateData.category = foundCategory._id;
     }
-    
+
     // ✅ Trim strings just in case
-    if (updateData.subcategory) updateData.subcategory = updateData.subcategory.trim();
+    if (updateData.subcategory)
+      updateData.subcategory = updateData.subcategory.trim();
     if (updateData.title) updateData.title = updateData.title.trim();
-    if (updateData.description) updateData.description = updateData.description.trim();
+    if (updateData.description)
+      updateData.description = updateData.description.trim();
 
     // ✅ Ensure subjects are parsed and trimmed
     if (updateData.subjects) {
@@ -170,7 +170,7 @@ export const updateMockTest = async (req, res) => {
       .json({ message: "Failed to update mocktest", error: err.message });
   }
 };
-// ✅ --- END OF NEW/UPDATED FUNCTION ---
+// ✅ --- END OF UPDATE FUNCTION ---
 
 /* Get mocktest by id */
 export const getMockTestById = async (req, res) => {
@@ -209,11 +209,9 @@ export const addQuestion = async (req, res) => {
     if (!mt) return res.status(404).json({ message: "MockTest not found" });
 
     const q = {
-      // --- 燥 TRIM SUBJECT, LEVEL, and TEXT ---
       subject: subject.trim(),
       level: level.trim().toLowerCase(), // normalize level
       questionText: questionText.trim(),
-      // --- 漕 END TRIM ---
       options: Array.isArray(options) ? options : JSON.parse(options),
       correctAnswer,
       marks: Number(marks || 1),
@@ -228,18 +226,17 @@ export const addQuestion = async (req, res) => {
     mt.totalMarks = mt.questions.reduce((s, qq) => s + (qq.marks || 1), 0);
 
     await mt.save();
-    res
-      .status(201)
-      .json({
-        message: "Question added",
-        question: mt.questions[mt.questions.length - 1],
-      });
+    res.status(201).json({
+      message: "Question added",
+      question: mt.questions[mt.questions.length - 1],
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: err.message });
   }
 };
 
+// ... (keep all other controller functions: bulkUploadQuestions, togglePublish, deleteMockTest, etc.) ...
 // ⭐ 2. REWRITTEN BULK UPLOAD FUNCTION
 export const bulkUploadQuestions = async (req, res) => {
   try {
@@ -247,25 +244,6 @@ export const bulkUploadQuestions = async (req, res) => {
     if (!filePath) throw new Error("No file uploaded");
 
     let parsedRows = [];
-
-    // Helper to convert "Option A", "Option B" etc. to an index
-    const answerToIndex = (answer) => {
-      const options = ["optiona", "optionb", "optionc", "optiond"];
-      // Normalize the answer from the CSV to match our keys
-      const cleanAnswer = (answer || "").replace(/\s+/g, "").toLowerCase();
-
-      const index = options.indexOf(cleanAnswer);
-
-      // Also check if the answer is "A", "B", "C", "D"
-      if (index === -1 && cleanAnswer.length === 1) {
-        return cleanAnswer.charCodeAt(0) - "a".charCodeAt(0);
-      }
-
-      // Or if the answer from the CSV *is* the option text (e.g. "Option A")
-      // This is less reliable but a good fallback.
-      // We will handle this inside the row mapping.
-      return index;
-    };
 
     if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
       const workbook = xlsx.readFile(filePath);
@@ -392,8 +370,6 @@ export const updateStatus = async (req, res) => {
   }
 };
 
-// controllers/mockTestController.j
-
 // ✅ Toggle Publish/Unpublish
 export const togglePublish = async (req, res) => {
   try {
@@ -499,11 +475,9 @@ export const getMockTests = async (req, res) => {
     }
 
     if (category) {
-      // 🟢 If category is ObjectId → use it
       if (mongoose.Types.ObjectId.isValid(category)) {
         filter.category = category;
       } else {
-        // 🟢 Otherwise match by slug or name ONLY
         const cat = await Category.findOne({
           $or: [{ slug: category }, { name: category }],
         });
@@ -511,7 +485,6 @@ export const getMockTests = async (req, res) => {
         if (cat) {
           filter.category = cat._id;
         } else {
-          // 🟢 FINAL fallback: use categorySlug = "ssc"
           filter.categorySlug = category;
         }
       }

@@ -39,9 +39,9 @@ export const updateMockTest = createAsyncThunk(
   "mocktest/update",
   async (payload, { rejectWithValue }) => {
     try {
-      // ✅ FIX: Remove all name transformations.
-      // The backend (as per createMockTest) expects durationMinutes and negativeMarking.
-      // We just pass the payload directly.
+      // ✅ FIX: No name transformations needed.
+      // The backend expects durationMinutes and negativeMarking,
+      // which is exactly what the form sends.
       const { id, ...data } = payload;
       const res = await api.put(`api/admin/mocktests/${id}`, data); // Send data as-is
       return res.data;

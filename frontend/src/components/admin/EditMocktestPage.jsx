@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { toast } from "react-toastify";
-import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa"; 
+import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa";
 
 const EditMocktestPage = () => {
   const { id } = useParams();
@@ -16,14 +16,13 @@ const EditMocktestPage = () => {
     const fetchMocktest = async () => {
       try {
         const res = await axios.get(`${serverURL}api/admin/mocktests/${id}`);
-        // --- ✅ SOLUTION: Set mocktest to res.data, not res.data.mocktest ---
-        setMocktest(res.data); 
+        setMocktest(res.data);
       } catch (err) {
         toast.error("Failed to load mocktest details");
       }
     };
     fetchMocktest();
-  }, [id, serverURL]); // Added serverURL to dependency array
+  }, [id, serverURL]);
 
   const handleChange = (e) => {
     setMocktest({ ...mocktest, [e.target.name]: e.target.value });
@@ -32,8 +31,8 @@ const EditMocktestPage = () => {
   const handleSave = async () => {
     setLoading(true);
     try {
-      // This assumes your backend accepts the 'mocktest' object directly
-      // with fields like 'duration' and 'negativeMarks'
+      // Send the 'mocktest' object. It now has the correct keys
+      // (durationMinutes, negativeMarking) that the backend expects.
       await axios.put(`${serverURL}api/admin/mocktests/${id}`, mocktest);
       toast.success("Mocktest updated successfully!");
       navigate(-1);
@@ -65,7 +64,7 @@ const EditMocktestPage = () => {
         <input
           type="text"
           name="title"
-          value={mocktest.title}
+          value={mocktest.title || ""} // Add || "" for safety
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Title"
@@ -73,36 +72,43 @@ const EditMocktestPage = () => {
         <input
           type="text"
           name="subcategory"
-          value={mocktest.subcategory}
+          value={mocktest.subcategory || ""} // Add || "" for safety
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Subcategory"
         />
+
+        {/* ✅ START OF FIX */}
         <input
           type="number"
-          name="duration"
-          value={mocktest.duration}
+          name="durationMinutes" // 1. Name must match the data key
+          value={mocktest.durationMinutes || ""} // 2. Value must match the data key
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Duration"
         />
+        {/* ✅ END OF FIX */}
+
         <input
           type="number"
           name="totalMarks"
-          value={mocktest.totalMarks}
+          value={mocktest.totalMarks || ""} // Add || "" for safety
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Total Marks"
         />
+
+        {/* ✅ START OF FIX */}
         <input
           type="number"
-          name="negativeMarks"
+          name="negativeMarking" // 1. Name must match the data key
           step="0.01"
-          value={mocktest.negativeMarks}
+          value={mocktest.negativeMarking || ""} // 2. Value must match the data key
           onChange={handleChange}
           className="w-full border p-2 rounded"
           placeholder="Negative Marks"
         />
+        {/* ✅ END OF FIX */}
 
         <div className="flex justify-end">
           <button

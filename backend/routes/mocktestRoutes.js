@@ -16,6 +16,9 @@ import {
 
 import { isAuth } from "../middleware/isAuth.js";
 import { uploadFile, uploadQuestionImages } from "../middleware/upload.js";
+import { addPassageWithChildren } from "../controllers/mockTestController.js";
+import { uploadAny } from "../middleware/upload.js";
+
 
 const router = express.Router();
 
@@ -55,6 +58,13 @@ router.post(
   isAuth,
   uploadFile.single("file"),
   bulkUploadQuestions
+);
+
+// Add passage with multiple child questions
+router.post(
+  "/:id/questions/passage-bulk",
+  uploadAny,
+  addPassageWithChildren
 );
 
 

@@ -1,18 +1,13 @@
-
-// frontend/src/pages/student/WriteMocktest.jsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../api/axios";
 import { ClipLoader } from "react-spinners";
 import toast from "react-hot-toast";
 
-/* --------------------------------------
-   BASE URL (Vite-safe)
--------------------------------------- */
 const BASE_URL = import.meta.env.VITE_SERVER_URL || "http://localhost:8000";
 
 /* --------------------------------------
-   Timer Component
+   TIMER
 -------------------------------------- */
 const Timer = ({ expiryTimestamp, onTimeUp }) => {
   const [remaining, setRemaining] = useState(expiryTimestamp - Date.now());
@@ -43,7 +38,7 @@ const Timer = ({ expiryTimestamp, onTimeUp }) => {
 };
 
 /* --------------------------------------
-   WriteMocktest Component
+   MAIN COMPONENT
 -------------------------------------- */
 const WriteMocktest = () => {
   const { attemptId } = useParams();
@@ -52,113 +47,110 @@ const WriteMocktest = () => {
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState("all");
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   /* --------------------------------------
-     Fetch Attempt Details
+      FETCH ATTEMPT
   -------------------------------------- */
   useEffect(() => {
-    const fetchAttempt = async () => {
+    const load = async () => {
       try {
         const { data } = await api.get(`/api/student/attempt/${attemptId}`);
         setAttempt(data);
 
-        // Restore saved answers
+        let restored = {};
         if (data.answers) {
-          const restored = {};
           data.answers.forEach((a) => {
             restored[a.questionId] = {
-              selected: a.selectedAnswer !== null ? [Number(a.selectedAnswer)] : [],
-              manual: typeof a.selectedAnswer === "string" ? a.selectedAnswer : "",
+              selected:
+                typeof a.selectedAnswer === "number"
+                  ? [a.selectedAnswer]
+                  : [],
+              manual:
+                typeof a.selectedAnswer === "string" ? a.selectedAnswer : "",
             };
           });
-          setAnswers(restored);
         }
+        setAnswers(restored);
       } catch (err) {
-        toast.error("Could not load test");
+        toast.error("Failed to load test");
         navigate("/student-dashboard");
       } finally {
         setLoading(false);
       }
     };
-    fetchAttempt();
+    load();
   }, [attemptId, navigate]);
 
   /* --------------------------------------
-     Subjects List
+      SUBJECT FILTERING
   -------------------------------------- */
   const subjects = useMemo(() => {
     if (!attempt) return [];
-    const unique = new Set(attempt.questions.map((q) => q.subject));
-    return ["all", ...unique];
+    const set = new Set(attempt.questions.map((q) => q.subject));
+    return ["all", ...set];
   }, [attempt]);
 
-  /* --------------------------------------
-     Filter by Subject
-  -------------------------------------- */
   const filteredQuestions = useMemo(() => {
     if (!attempt) return [];
-    if (selectedSubject === "all") return attempt.questions;
-    return attempt.questions.filter((q) => q.subject === selectedSubject);
+    return selectedSubject === "all"
+      ? attempt.questions
+      : attempt.questions.filter((q) => q.subject === selectedSubject);
   }, [attempt, selectedSubject]);
 
-  const currentQuestion = filteredQuestions[currentQuestionIndex];
+  const current = filteredQuestions[currentIndex];
 
   /* --------------------------------------
-     Handle Answer Selection
+      SAVE ANSWER
   -------------------------------------- */
-  const handleAnswerChange = (questionId, type, value) => {
+  const handleAnswer = (qid, type, value) => {
     setAnswers((prev) => ({
       ...prev,
-      [questionId]: {
-        selected: type === "mcq" ? [Number(value)] : [],
+      [qid]: {
+        selected: type === "mcq" ? [value] : [],
         manual: type === "manual" ? value : "",
       },
     }));
   };
 
   /* --------------------------------------
-     Submit Test
+      SUBMIT TEST
   -------------------------------------- */
   const handleSubmit = async () => {
-    if (isSubmitting) return;
-    if (!window.confirm("Are you sure you want to submit the test?")) return;
+    if (!window.confirm("Are you sure you want to submit?")) return;
 
     setIsSubmitting(true);
     const toastId = toast.loading("Submitting...");
 
-    const formattedAnswers = Object.entries(answers).map(
-      ([questionId, ans]) => ({
-        questionId,
-        selectedAnswer:
-          ans.manual?.trim() !== ""
-            ? ans.manual
-            : ans.selected?.[0] ?? null,
-      })
-    );
+    const formatted = Object.entries(answers).map(([id, a]) => ({
+      questionId: id,
+      selectedAnswer:
+        a.manual?.trim() !== ""
+          ? a.manual
+          : a.selected?.length
+          ? a.selected[0]
+          : null,
+    }));
 
     try {
       await api.post(`/api/student/submit-test/${attemptId}`, {
-        answers: formattedAnswers,
+        answers: formatted,
       });
-      toast.success("Test submitted successfully!", { id: toastId });
+      toast.success("Submitted!", { id: toastId });
       navigate("/student-dashboard");
     } catch (err) {
-      toast.error("Submit failed", { id: toastId });
+      toast.error("Error submitting", { id: toastId });
       setIsSubmitting(false);
     }
   };
 
   const handleTimeUp = () => {
-    toast.error("Time is up! Auto-submitting...");
+    toast.error("Time up! Auto-submitting...");
     handleSubmit();
   };
 
-  /* --------------------------------------
-     Loader
-  -------------------------------------- */
   if (loading || !attempt) {
     return (
       <div className="flex justify-center items-center h-[80vh]">
@@ -170,36 +162,159 @@ const WriteMocktest = () => {
   const endsAt = attempt.endsAt;
 
   /* --------------------------------------
-     Render
+      RENDER PASSAGE IF CHILD QUESTION
+  -------------------------------------- */
+  const renderPassage = (q) => {
+    if (!q.parentPassage) return null;
+    return (
+      <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded mb-4">
+        <h4 className="font-semibold mb-2 text-blue-900">Passage</h4>
+
+        {q.parentPassage.text && (
+          <p className="whitespace-pre-line mb-3">
+            {q.parentPassage.text}
+          </p>
+        )}
+
+        {q.parentPassage.imageUrl && (
+          <img
+            src={`${BASE_URL}/${q.parentPassage.imageUrl}`}
+            className="max-h-80 object-contain rounded"
+            alt="passage"
+          />
+        )}
+      </div>
+    );
+  };
+
+  /* --------------------------------------
+      RENDER A PASSAGE QUESTION ITSELF
+  -------------------------------------- */
+  const renderPassageItem = (q) => {
+    return (
+      <div className="bg-purple-50 border-l-4 border-purple-400 p-4 rounded mb-6">
+        <h4 className="font-semibold text-purple-900 mb-2">
+          Passage
+        </h4>
+
+        {q.questionText && (
+          <p className="whitespace-pre-line mb-3">{q.questionText}</p>
+        )}
+
+        {q.questionImageUrl && (
+          <img
+            src={`${BASE_URL}/${q.questionImageUrl}`}
+            className="max-h-80 object-contain rounded"
+            alt="passage"
+          />
+        )}
+
+        <p className="text-sm italic mt-2 text-purple-700">
+          Questions based on this passage follow next →
+        </p>
+      </div>
+    );
+  };
+
+  /* --------------------------------------
+      RENDER QUESTION BLOCK
+  -------------------------------------- */
+  const renderQuestion = (q) => {
+    // 1️⃣ PASSAGE TYPE
+    if (q.questionType === "passage") {
+      return renderPassageItem(q);
+    }
+
+    // 2️⃣ CHILD QUESTION → SHOW PASSAGE ABOVE
+    const passageBlock = renderPassage(q);
+
+    return (
+      <div>
+        {passageBlock}
+
+        <h3 className="text-lg font-semibold mb-3">
+          {q.questionText}
+        </h3>
+
+        {q.questionImageUrl && (
+          <img
+            src={`${BASE_URL}/${q.questionImageUrl}`}
+            className="max-h-80 object-contain rounded mb-4"
+            alt="question"
+          />
+        )}
+
+        {/* MCQ */}
+        {q.questionType === "mcq" ? (
+          q.options.map((opt, idx) => {
+            const chosen = answers[q._id]?.selected?.[0] === idx;
+            return (
+              <button
+                key={idx}
+                onClick={() => handleAnswer(q._id, "mcq", idx)}
+                className={`w-full text-left p-3 border rounded mb-3 flex gap-3 items-center ${
+                  chosen
+                    ? "bg-blue-100 border-blue-600"
+                    : "bg-white"
+                }`}
+              >
+                {opt.imageUrl && (
+                  <img
+                    src={`${BASE_URL}/${opt.imageUrl}`}
+                    className="w-16 h-16 object-contain rounded"
+                    alt=""
+                  />
+                )}
+                <span>{opt.text || "Empty option"}</span>
+              </button>
+            );
+          })
+        ) : (
+          // MANUAL
+          <textarea
+            rows="4"
+            className="w-full border p-3 rounded"
+            value={answers[q._id]?.manual || ""}
+            onChange={(e) =>
+              handleAnswer(q._id, "manual", e.target.value)
+            }
+          />
+        )}
+      </div>
+    );
+  };
+
+  /* --------------------------------------
+      PAGE RENDER
   -------------------------------------- */
   return (
     <div className="flex h-[calc(100vh-80px)] mt-10">
       
-      {/* SUBJECTS LIST */}
+      {/* SUBJECT LIST */}
       <div className="w-1/5 bg-gray-50 border-r p-4">
         <h2 className="text-lg font-semibold mb-3">Subjects</h2>
-        {subjects.map((sub) => (
+        {subjects.map((s) => (
           <button
-            key={sub}
+            key={s}
             onClick={() => {
-              setSelectedSubject(sub);
-              setCurrentQuestionIndex(0);
+              setSelectedSubject(s);
+              setCurrentIndex(0);
             }}
             className={`block w-full px-3 py-2 mb-2 rounded ${
-              selectedSubject === sub
+              selectedSubject === s
                 ? "bg-blue-600 text-white"
                 : "bg-white border"
             }`}
           >
-            {sub}
+            {s}
           </button>
         ))}
       </div>
 
-      {/* MAIN CONTENT */}
+      {/* RIGHT CONTENT */}
       <div className="w-4/5 flex flex-col">
         
-        {/* Header */}
+        {/* HEADER */}
         <div className="flex justify-between p-4 bg-white border-b">
           <h1 className="font-bold text-lg">{attempt.mocktestId?.title}</h1>
           <Timer
@@ -208,107 +323,30 @@ const WriteMocktest = () => {
           />
         </div>
 
-        {/* Question */}
+        {/* QUESTION VIEW */}
         <div className="p-6 bg-gray-100 overflow-y-auto flex-grow">
-          {!currentQuestion ? (
-            <p>No questions for this subject.</p>
+          {!current ? (
+            <p>No questions.</p>
           ) : (
             <div className="bg-white p-6 rounded shadow">
-              <h3 className="text-lg font-semibold mb-3">
-                Question {currentQuestionIndex + 1}
-              </h3>
-
-              {/* TEXT */}
-              {currentQuestion.questionText && (
-                <p className="mb-4">{currentQuestion.questionText}</p>
-              )}
-
-              {/* IMAGE */}
-              {currentQuestion.questionImageUrl && (
-                <img
-                  src={`${BASE_URL}/${currentQuestion.questionImageUrl}`}
-                  className="max-h-80 object-contain rounded mb-4"
-                  alt="question"
-                />
-              )}
-
-              {/* MCQ */}
-              {currentQuestion.questionType === "mcq" ? (
-                currentQuestion.options.map((opt, idx) => {
-                  const selected =
-                    answers[currentQuestion._id]?.selected?.[0] === idx;
-
-                  return (
-                    <button
-                      key={idx}
-                      onClick={() =>
-                        handleAnswerChange(
-                          currentQuestion._id,
-                          "mcq",
-                          idx
-                        )
-                      }
-                      className={`w-full text-left p-3 border rounded mb-3 flex gap-3 items-center ${
-                        selected
-                          ? "bg-blue-100 border-blue-600"
-                          : "bg-white"
-                      }`}
-                    >
-                      {/* OPTION IMAGE */}
-                      {opt.imageUrl && (
-                        <img
-                          src={`${BASE_URL}/${opt.imageUrl}`}
-                          className="w-20 h-20 object-contain rounded"
-                          alt=""
-                        />
-                      )}
-
-                      {/* OPTION TEXT */}
-                      {opt.text && <span>{opt.text}</span>}
-
-                      {/* EMPTY OPTION */}
-                      {!opt.text && !opt.imageUrl && (
-                        <span className="italic text-gray-400">
-                          Empty option
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              ) : (
-                /* MANUAL */
-                <textarea
-                  rows="4"
-                  className="w-full border p-3 rounded"
-                  value={answers[currentQuestion._id]?.manual || ""}
-                  onChange={(e) =>
-                    handleAnswerChange(
-                      currentQuestion._id,
-                      "manual",
-                      e.target.value
-                    )
-                  }
-                />
-              )}
+              {renderQuestion(current)}
             </div>
           )}
         </div>
 
-        {/* NAVIGATION + SUBMIT */}
+        {/* FOOTER BUTTONS */}
         <div className="flex justify-between p-4 bg-white border-t">
           <button
-            disabled={currentQuestionIndex === 0}
-            onClick={() => setCurrentQuestionIndex((i) => i - 1)}
+            disabled={currentIndex === 0}
+            onClick={() => setCurrentIndex((i) => i - 1)}
             className="px-6 py-2 bg-gray-300 rounded disabled:opacity-50"
           >
             Previous
           </button>
 
           <button
-            disabled={
-              currentQuestionIndex === filteredQuestions.length - 1
-            }
-            onClick={() => setCurrentQuestionIndex((i) => i + 1)}
+            disabled={currentIndex === filteredQuestions.length - 1}
+            onClick={() => setCurrentIndex((i) => i + 1)}
             className="px-6 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
           >
             Next
@@ -318,7 +356,7 @@ const WriteMocktest = () => {
             onClick={handleSubmit}
             className="px-6 py-2 bg-green-600 text-white rounded"
           >
-            Submit Test
+            Submit
           </button>
         </div>
       </div>

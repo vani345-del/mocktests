@@ -35,198 +35,260 @@ export const getAvailableMocktests = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // 2️⃣ Start a Mocktest Attempt (AUTH REQUIRED)
+// helper
+
+// Group passages and their children so passage appears once followed by its children
+function groupPassagesAndChildren(items) {
+  // items: array of question-like objects (may include passage objects)
+  const byId = new Map();
+  const passageOrder = [];
+  const standalone = [];
+
+  // index by id
+  items.forEach((q) => {
+    byId.set(q._id.toString(), q);
+  });
+
+  // gather passage ids first (in order)
+  items.forEach((q) => {
+    if (q.questionType === "passage" || q.isPassage) {
+      passageOrder.push(q._id.toString());
+    }
+  });
+
+  // build groups: for each passage push passage then its children (children reference parentQuestionId)
+  const used = new Set();
+  const result = [];
+
+  // first, push passages with children
+  for (const pid of passageOrder) {
+    const passage = byId.get(pid);
+    if (!passage) continue;
+    result.push(passage);
+    used.add(pid);
+
+    // find children that reference this parent (preserve order from items)
+    items.forEach((q) => {
+      if (!q._id) return;
+      const qid = q._id.toString();
+      if (used.has(qid)) return;
+      if (q.parentQuestionId && q.parentQuestionId.toString() === pid) {
+        result.push(q);
+        used.add(qid);
+      }
+    });
+  }
+
+  // now push remaining items that are not part of any passage-group and not yet used
+  items.forEach((q) => {
+    const qid = q._id?.toString();
+    if (!qid) return;
+    if (!used.has(qid)) {
+      result.push(q);
+      used.add(qid);
+    }
+  });
+
+  return result;
+}
+
 export const startMocktest = async (req, res) => {
   try {
     const { mocktestId } = req.params;
     const studentId = req.user.id;
 
-    const mocktest = await MockTest.findById(mocktestId);
-    if (!mocktest)
-      return res.status(404).json({ success: false, message: "Mocktest not found" });
+    if (!mongoose.Types.ObjectId.isValid(mocktestId)) {
+      return res.status(400).json({ success: false, message: "Invalid mocktest id" });
+    }
 
-    // ----------------------------------------------------
-    // 📌 ACCESS CONTROL
-    // ----------------------------------------------------
-    const order = await Order.findOne({
-      user: studentId,
-      items: mocktestId,
-      status: "successful",
-    });
+    const mocktest = await MockTest.findById(mocktestId).lean();
+    if (!mocktest) return res.status(404).json({ success: false, message: "Mocktest not found" });
+
+    // --- Access control: purchase for paid tests ---
+    if (mocktest.price > 0) {
+      const order = await Order.findOne({ user: studentId, items: mocktestId, status: "successful" });
+      if (!order) {
+        return res.status(403).json({ success: false, message: "You have not purchased this test." });
+      }
+    }
 
     const now = new Date();
-    let examEndTime;
+    let endsAt;
 
-    if (mocktest.price > 0 && !order) {
-      return res.status(403).json({
-        success: false,
-        message: "You have not purchased this test.",
-      });
-    }
-
+    // Grand test scheduling window handling
     if (mocktest.isGrandTest) {
+      if (!mocktest.scheduledFor) return res.status(400).json({ success: false, message: "Grand test missing scheduledFor" });
       const startTime = new Date(mocktest.scheduledFor);
-      examEndTime = new Date(
-        startTime.getTime() + mocktest.durationMinutes * 60000
-      );
-
-      if (now < startTime) {
-        return res.status(403).json({
-          success: false,
-          message: `This Grand Test starts at ${startTime.toLocaleString()}`,
-        });
-      }
-
-      if (now > examEndTime) {
-        return res.status(403).json({
-          success: false,
-          message: "Time window for this Grand Test is closed.",
-        });
-      }
+      const examEndTime = new Date(startTime.getTime() + Number(mocktest.durationMinutes || 0) * 60000);
+      if (now < startTime) return res.status(403).json({ success: false, message: `This Grand Test starts at ${startTime.toLocaleString()}` });
+      if (now > examEndTime) return res.status(403).json({ success: false, message: "Time window for this Grand Test is closed." });
+      endsAt = examEndTime;
     } else {
-      examEndTime = new Date(
-        now.getTime() + mocktest.durationMinutes * 60000
-      );
+      endsAt = new Date(now.getTime() + Number(mocktest.durationMinutes || 0) * 60000);
     }
 
-    // ----------------------------------------------------
-    // 📌 HYBRID QUESTION SELECTION
-    // ----------------------------------------------------
+    // Build questions list for attempt
     let questionsForAttempt = [];
 
-    // ------- 1️⃣ USE ADMIN ATTACHED QUESTIONS FIRST -------
+    // If mocktest.questionIds exists and has items -> fetch them in that order
     if (Array.isArray(mocktest.questionIds) && mocktest.questionIds.length > 0) {
-      const qs = await Question.find({
-        _id: { $in: mocktest.questionIds },
-      }).lean();
-
-      // preserve admin order
+      // get questions by ids
+      const qs = await Question.find({ _id: { $in: mocktest.questionIds } }).lean();
+      // create map for quick lookup and preserve order from mocktest.questionIds
       const map = {};
-      qs.forEach((q) => (map[q._id.toString()] = q));
+      qs.forEach((q) => { map[q._id.toString()] = q; });
 
-      const ordered = mocktest.questionIds
-        .map((id) => map[id.toString()])
-        .filter(Boolean);
+      const ordered = mocktest.questionIds.map(id => map[id.toString()]).filter(Boolean);
 
       questionsForAttempt = ordered.map((q) => ({
         _id: q._id,
+        questionType: q.questionType || "mcq",
         subject: q.category,
         level: q.difficulty,
-        questionText: q.title,
+        questionText: q.title || "",
         questionImageUrl: q.questionImageUrl || null,
-        options: (q.options || []).map((opt) => ({
+        options: Array.isArray(q.options) ? q.options.map(opt => ({
           text: opt.text || "",
-          imageUrl: opt.imageUrl || null,
-        })),
-        correct: q.correct,
-        marks: q.marks,
-        negative: q.negative,
-        explanation: q.explanation || null,
-        questionType: q.questionType || "mcq",
+          imageUrl: opt.imageUrl || null
+        })) : [],
+        correct: q.correct || [],
         correctManualAnswer: q.correctManualAnswer || null,
+        marks: q.marks || 1,
+        negative: q.negative || 0,
+        explanation: q.explanation || null,
+        parentQuestionId: q.parentQuestionId || null,
+        isPassage: !!(q.questionType === "passage" || q.isPassage),
       }));
-    } // 👈 THIS BRACE WAS MISSING IN YOUR CODE!
+    }
 
-    // ------- 2️⃣ FALLBACK: SUBJECT + DIFFICULTY SELECTION -------
-    if (questionsForAttempt.length === 0) {
-      const subjectMap = new Map();
+    // If no explicit questionIds, fallback to sampling by subjects config
+    if (!questionsForAttempt.length) {
+      // build subject counts from mocktest.subjects array
+      const subjectCounts = {};
+      (mocktest.subjects || []).forEach(s => {
+        const name = s.name;
+        subjectCounts[name] = subjectCounts[name] || { easy: 0, medium: 0, hard: 0 };
+        subjectCounts[name].easy += Number(s.easy || 0);
+        subjectCounts[name].medium += Number(s.medium || 0);
+        subjectCounts[name].hard += Number(s.hard || 0);
+      });
 
-      for (const sub of mocktest.subjects || []) {
-        const { name, easy = 0, medium = 0, hard = 0 } = sub;
-
-        if (!subjectMap.has(name)) {
-          subjectMap.set(name, { easy: 0, medium: 0, hard: 0 });
+      // aggregate queries
+      const fetches = [];
+      for (const [name, counts] of Object.entries(subjectCounts)) {
+        for (const level of ["easy", "medium", "hard"]) {
+          const count = counts[level] || 0;
+          if (count > 0) {
+            fetches.push(
+              Question.aggregate([
+                { $match: { category: name, difficulty: level } },
+                { $sample: { size: count } }
+              ])
+            );
+          }
         }
-
-        const s = subjectMap.get(name);
-        s.easy += Number(easy);
-        s.medium += Number(medium);
-        s.hard += Number(hard);
       }
+      const arrays = await Promise.all(fetches);
+      const flat = arrays.flat();
+      questionsForAttempt = flat.map(q => ({
+        _id: q._id,
+        questionType: q.questionType || "mcq",
+        subject: q.category,
+        level: q.difficulty,
+        questionText: q.title || "",
+        questionImageUrl: q.questionImageUrl || null,
+        options: Array.isArray(q.options) ? q.options.map(opt => ({ text: opt.text || "", imageUrl: opt.imageUrl || null })) : [],
+        correct: q.correct || [],
+        correctManualAnswer: q.correctManualAnswer || null,
+        marks: q.marks || 1,
+        negative: q.negative || 0,
+        explanation: q.explanation || null,
+        parentQuestionId: q.parentQuestionId || null,
+        isPassage: !!(q.questionType === "passage" || q.isPassage),
+      }));
+    }
 
-      const fetchQuestions = async (subjectName, difficulty, count) => {
-        if (count <= 0) return [];
+    if (!questionsForAttempt.length) {
+      return res.status(400).json({ success: false, message: "No questions found for this test." });
+    }
 
-        const selected = await Question.aggregate([
-          { $match: { category: subjectName, difficulty } },
-          { $sample: { size: count } },
-        ]);
+    // Optionally shuffle non-passage blocks — keep passages grouped, but if you want stable order comment this out
+    // questionsForAttempt = shuffleArray(questionsForAttempt);
 
-        return selected.map((q) => ({
-          _id: q._id,
-          subject: q.category,
-          level: q.difficulty,
-          questionText: q.title,
-          questionImageUrl: q.questionImageUrl || null,
-          options: (q.options || []).map((opt) => ({
-            text: opt.text || "",
-            imageUrl: opt.imageUrl || null,
-          })),
-          correct: q.correct,
-          marks: q.marks,
-          negative: q.negative,
-          explanation: q.explanation || null,
-          questionType: q.questionType,
-          correctManualAnswer: q.correctManualAnswer || null,
-        }));
+    // Group passages and children so passage shows once followed by its children
+    const grouped = groupPassagesAndChildren(questionsForAttempt);
+
+    // Attach parentPassage object to children (so frontend can render passage before children)
+    // Build a map of passage id -> passage content
+    const passageMap = {};
+    grouped.forEach(q => {
+      if ((q.questionType === "passage" || q.isPassage) && q._id) {
+        passageMap[q._id.toString()] = {
+          text: q.questionText || "",
+          imageUrl: q.questionImageUrl || null,
+          _id: q._id
+        };
+      }
+    });
+
+    // Build attempt questions payload (including parentPassage on child items)
+    const attemptQuestionsForDB = grouped.map(q => {
+      const isPass = q.questionType === "passage" || q.isPassage;
+      const obj = {
+        _id: q._id,
+        questionType: q.questionType || (isPass ? "passage" : "mcq"),
+        subject: q.subject,
+        level: q.level,
+        questionText: q.questionText || "",
+        questionImageUrl: q.questionImageUrl || null,
+        options: Array.isArray(q.options) ? q.options : [],
+        correct: q.correct || [],
+        correctManualAnswer: q.correctManualAnswer || null,
+        marks: q.marks || 1,
+        negative: q.negative || 0,
+        explanation: q.explanation || null,
+        parentQuestionId: q.parentQuestionId || null,
+        isPassage: isPass
       };
 
-      const promises = [];
-
-      for (const [name, counts] of subjectMap.entries()) {
-        promises.push(fetchQuestions(name, "easy", counts.easy));
-        promises.push(fetchQuestions(name, "medium", counts.medium));
-        promises.push(fetchQuestions(name, "hard", counts.hard));
+      // If this item is a child (has parentQuestionId), attach parentPassage quick object
+      if (obj.parentQuestionId) {
+        const pid = obj.parentQuestionId.toString();
+        if (passageMap[pid]) {
+          obj.parentPassage = passageMap[pid];
+        } else {
+          // fallback: if parent not in map, try to find by parentQuestionId in grouped
+          const p = grouped.find(x => x._id && x._id.toString() === pid);
+          if (p) obj.parentPassage = { text: p.questionText || "", imageUrl: p.questionImageUrl || null, _id: p._id };
+        }
       }
 
-      const arrays = await Promise.all(promises);
+      return obj;
+    });
 
-      questionsForAttempt = arrays.flat();
-    }
-
-    // No questions
-    if (!questionsForAttempt.length) {
-      return res.status(400).json({
-        success: false,
-        message: "No questions found for this test.",
-      });
-    }
-
-    // Shuffle
-    questionsForAttempt = shuffleArray(questionsForAttempt);
-
-    const endsAt = mocktest.isGrandTest
-      ? examEndTime
-      : new Date(now.getTime() + mocktest.durationMinutes * 60000);
-
-    // ----------------------------------------------------
-    // 📌 CREATE ATTEMPT
-    // ----------------------------------------------------
-    const attempt = await Attempt.create({
+    // Save Attempt with answers array initialized empty to avoid earlier errors
+    const attemptDoc = await Attempt.create({
       studentId,
       mocktestId,
-      questions: questionsForAttempt,
-      answers: [],
+      questions: attemptQuestionsForDB,
+      answers: [], // important: array
       startedAt: now,
       endsAt,
-      status: "in-progress",
+      status: "in-progress"
     });
 
-    await Usermodel.findByIdAndUpdate(studentId, {
-      $push: { attempts: attempt._id },
-    });
+    // Link attempt to user
+    await Usermodel.findByIdAndUpdate(studentId, { $push: { attempts: attemptDoc._id } });
 
-    // Remove correct answers from frontend
-    const safeQuestions = questionsForAttempt.map((q) => {
-      const { correct, correctManualAnswer, ...rest } = q;
+    // Return questions to frontend WITHOUT answers/corrects
+    const safeQuestions = attemptQuestionsForDB.map(q => {
+      const { correct, correctManualAnswer, explanation, ...rest } = q;
+      // For passage items, keep the passage text/image (rest.questionText)
+      // For child items, include parentPassage (helps frontend)
       return rest;
     });
 
-    return res.json({
-      success: true,
-      attemptId: attempt._id,
-      endsAt,
-      questions: safeQuestions,
-    });
+    return res.json({ success: true, attemptId: attemptDoc._id, endsAt, questions: safeQuestions });
   } catch (err) {
     console.error("❌ Error in startMocktest:", err);
     return res.status(500).json({ success: false, message: err.message });
@@ -366,26 +428,34 @@ export const getAttemptById = async (req, res) => {
     if (attempt.studentId.toString() !== studentId) return res.status(403).json({ success: false, message: "Not authorized" });
     if (attempt.status === "completed") return res.status(400).json({ success: false, message: "Test already completed.", redirectTo: `/student/results/${attempt._id}` });
 
+    // Ensure answers is an array
     const safeAnswers = Array.isArray(attempt.answers) ? attempt.answers : [];
+
+    // Build questions for frontend removing sensitive fields
     const questions = (attempt.questions || []).map(q => {
-      const { correct, correctManualAnswer, ...rest } = q;
+      const { correct, correctManualAnswer, explanation, ...rest } = q;
       return rest;
     });
 
-    res.json({
+    // Map minimal answers to restore frontend state
+    const mappedAnswers = safeAnswers.map(a => ({
+      questionId: a.questionId,
+      selectedAnswer: a.selectedAnswer
+    }));
+
+    return res.json({
       _id: attempt._id,
       mocktestId: attempt.mocktestId,
       endsAt: attempt.endsAt,
       status: attempt.status,
       questions,
-      answers: safeAnswers.map(a => ({ questionId: a.questionId, selectedAnswer: a.selectedAnswer }))
+      answers: mappedAnswers
     });
   } catch (err) {
     console.error("❌ Error in getAttemptById:", err);
     return res.status(500).json({ success: false, message: err.message });
   }
 };
-
 
 export const getGrandTestLeaderboard = async (req, res) => {
   try {

@@ -346,10 +346,25 @@ export const getMockTestById = async (req, res) => {
     }
 };
 
+// backend/controllers/mockTestController.js (partial - addQuestion)
+
+
 export const addQuestion = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { subject, level, questionText, options, correct, correctManualAnswer, questionType = "mcq", marks, negative, explanation } = req.body;
+    const { id } = req.params; // mocktest id
+    const {
+      subject,
+      level,
+      questionText,
+      options,
+      correct,
+      correctManualAnswer,
+      questionType = "mcq",
+      marks,
+      negative,
+      explanation,
+      parentQuestionId // <-- optional: link to passage
+    } = req.body;
 
     const mt = await MockTest.findById(id);
     if (!mt) return res.status(404).json({ message: "MockTest not found" });
@@ -365,7 +380,8 @@ export const addQuestion = async (req, res) => {
       marks: Number(marks || 1),
       negative: Number(negative || 0),
       explanation: explanation?.trim() || "",
-      questionImageUrl: getFileUrl("questionImage")
+      questionImageUrl: getFileUrl("questionImage"),
+      parentQuestionId: parentQuestionId || null
     };
 
     if (questionType === "mcq") {
@@ -376,19 +392,25 @@ export const addQuestion = async (req, res) => {
       }));
 
       newQuestionData.correct = Array.isArray(correct) ? correct.map(Number) : JSON.parse(correct || "[]").map(Number);
-    } else {
+    } else if (questionType === "manual") {
       newQuestionData.correctManualAnswer = correctManualAnswer?.trim();
+    } else if (questionType === "passage") {
+      // For passage, title is the passage text, questionImageUrl may be image of passage.
+      // options / correct should not be present.
+      newQuestionData.options = [];
+      newQuestionData.correct = [];
     }
 
     const qDoc = new Question(newQuestionData);
     await qDoc.save();
 
+    // Attach to mocktest.questionIds so this question is part of the mocktest
     mt.questionIds.push(qDoc._id);
     mt.totalQuestions = mt.questionIds.length;
-    mt.totalMarks = (mt.totalMarks || 0) + (qDoc.marks || 1);
+    mt.totalMarks = (mt.totalMarks || 0) + (qDoc.marks || 0);
     await mt.save();
 
-    res.status(201).json({ message: "Question added successfully with images", questionId: qDoc._id, question: qDoc });
+    res.status(201).json({ message: "Question added successfully", questionId: qDoc._id, question: qDoc });
   } catch (err) {
     console.error("❌ Error in addQuestion:", err);
     res.status(500).json({ message: err.message });
@@ -739,3 +761,93 @@ export const createGlobalQuestion = async (req, res) => {
   }
 };
 // --- ✅ --- END OF UPDATED FUNCTION ---
+
+
+
+export const addPassageWithChildren = async (req, res) => {
+  try {
+    const { id } = req.params; // mocktest id
+
+    const mt = await MockTest.findById(id);
+    if (!mt) return res.status(404).json({ message: "MockTest not found" });
+
+    // req.body fields
+    const passageTitle = req.body.passageTitle?.toString() || "";
+    const passageCategory = req.body.category || req.body.passageCategory || mt?.subjects?.[0]?.name || "";
+    const passageDifficulty = req.body.difficulty || "medium";
+    const childrenRaw = req.body.children || "[]"; // JSON string
+    const children = Array.isArray(childrenRaw) ? childrenRaw : JSON.parse(childrenRaw || "[]");
+
+    // files
+    const files = req.files || []; // multer.any() yields array
+    // helper to find file by fieldname
+    const findFilePath = (fieldname) => {
+      const f = files.find(x => x.fieldname === fieldname);
+      return f ? f.path.replace(/\\/g, "/") : null;
+    };
+
+    // 1) create passage question
+    const passageData = {
+      questionType: "passage",
+      title: passageTitle,
+      questionImageUrl: findFilePath("passageImage") || null,
+      difficulty: passageDifficulty,
+      category: passageCategory,
+      marks: 0,
+      negative: 0,
+      options: [],
+      correct: []
+    };
+
+    const passageDoc = new Question(passageData);
+    await passageDoc.save();
+
+    // 2) create child MCQs
+    const createdChildIds = [];
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      // sanitize
+      const title = (c.title || "").toString();
+      const options = Array.isArray(c.options) ? c.options : [];
+      const marks = Number(c.marks || 1);
+      const negative = Number(c.negative || 0);
+      const difficulty = c.difficulty || passageDifficulty;
+      const correctIndex = typeof c.correctIndex !== "undefined" ? Number(c.correctIndex) : null;
+
+      // build options array with potential file lookups
+      const opts = options.map((optText, j) => {
+        const field = `child_${i}_optionImage${j}`;
+        return {
+          text: (optText || "").toString(),
+          imageUrl: findFilePath(field)
+        };
+      });
+
+      const childData = {
+        questionType: "mcq",
+        title,
+        questionImageUrl: null,
+        options: opts,
+        correct: Number.isFinite(correctIndex) ? [correctIndex] : [],
+        marks,
+        negative,
+        difficulty,
+        category: passageCategory,
+        parentQuestionId: passageDoc._id
+      };
+
+      const childDoc = new Question(childData);
+      await childDoc.save();
+      createdChildIds.push(childDoc._id);
+    }
+
+    // 3) attach passage and children to mocktest.questionIds
+    const allIds = [passageDoc._id, ...createdChildIds];
+    await MockTest.findByIdAndUpdate(id, { $push: { questionIds: { $each: allIds } }, $inc: { totalQuestions: allIds.length } });
+
+    res.status(201).json({ message: "Passage and children added", passageId: passageDoc._id, childIds: createdChildIds });
+  } catch (err) {
+    console.error("Error in addPassageWithChildren:", err);
+    res.status(500).json({ message: err.message });
+  }
+};

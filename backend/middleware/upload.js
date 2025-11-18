@@ -76,3 +76,8 @@ export const uploadImage = multer({
   storage: imageStorage,
   fileFilter: imageFileFilter
 });
+
+export const uploadAny = multer({
+  storage: imageStorage,
+  fileFilter: imageFileFilter
+}).any();

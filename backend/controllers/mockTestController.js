@@ -9,186 +9,332 @@ import csv from "csv-parser";
 import xlsx from "xlsx";
 
 
+
+
+const generateQuestionsForTest = async (subjects) => {
+    let questionIds = [];
+    let totalQuestions = 0;
+
+    for (const subject of subjects) {
+        const { name, easy, medium, hard } = subject;
+        
+        const difficultyMap = {
+            easy: easy || 0,
+            medium: medium || 0,
+            hard: hard || 0
+        };
+
+        for (const [level, count] of Object.entries(difficultyMap)) {
+            if (count > 0) {
+                // Use MongoDB Aggregation Pipeline for efficient random selection
+                const selected = await Question.aggregate([
+                    {
+                        $match: {
+                            category: name.trim(),
+                            difficulty: level,
+                        }
+                    },
+                    { $sample: { size: count } }, // Randomly select 'count' questions
+                    { $project: { _id: 1 } }
+                ]);
+
+                // Collect the IDs
+                questionIds = questionIds.concat(selected.map(q => q._id));
+                totalQuestions += selected.length;
+            }
+        }
+    }
+
+    return { questionIds, totalQuestions };
+};
+
+
 export const getMocktestsByCategory = async (req, res) => {
-  try {
-    const { category } = req.query;
-    console.log("getMocktestsByCategory called. query:", req.query);
+    try {
+        const { category } = req.query;
+        console.log("getMocktestsByCategory called. query:", req.query);
 
-    // No category => return all tests
-    if (!category) {
-      const allTests = await MockTest.find().sort({ createdAt: -1 });
-      return res.json(allTests);
+        // No category => return all tests
+        if (!category) {
+            const allTests = await MockTest.find().sort({ createdAt: -1 });
+            return res.json(allTests);
+        }
+
+        let filter = {};
+
+        // If category looks like a valid ObjectId -> use it directly
+        if (mongoose.Types.ObjectId.isValid(category)) {
+            filter.category = category;
+        } else {
+            // Try to find by slug or name
+            const catDoc = await Category.findOne({
+                $or: [{ slug: category }, { name: category }],
+            });
+
+            if (catDoc) {
+                console.log("Category found by slug/name:", catDoc._id);
+                filter.category = catDoc._id;
+            } else {
+                console.log("No category doc found — using categorySlug string match.");
+                filter.categorySlug = category;
+            }
+        }
+
+        const mocktests = await MockTest.find(filter).sort({ createdAt: -1 });
+        console.log("Found", mocktests.length, "mocktests for filter:", filter);
+        res.json(mocktests);
+    } catch (err) {
+        console.error("Error fetching mocktests by category:", err);
+        res.status(500).json({ message: err.message });
     }
-
-    let filter = {};
-
-    // If category looks like a valid ObjectId -> use it directly
-    if (mongoose.Types.ObjectId.isValid(category)) {
-      filter.category = category;
-    } else {
-      // Try to find by slug or name
-      const catDoc = await Category.findOne({
-        $or: [{ slug: category }, { name: category }],
-      });
-
-      if (catDoc) {
-        console.log("Category found by slug/name:", catDoc._id);
-        filter.category = catDoc._id;
-      } else {
-        console.log("No category doc found — using categorySlug string match.");
-        filter.categorySlug = category;
-      }
-    }
-
-    const mocktests = await MockTest.find(filter).sort({ createdAt: -1 });
-    console.log("Found", mocktests.length, "mocktests for filter:", filter);
-    res.json(mocktests);
-  } catch (err) {
-    console.error("Error fetching mocktests by category:", err);
-    res.status(500).json({ message: err.message });
-  }
 };
 
 /* Create mocktest (Stage 1) */
 export const createMockTest = async (req, res) => {
-  try {
-    let {
-      category,
-      subcategory,
-      title,
-      description,
-      durationMinutes,
-      totalQuestions,
-      totalMarks,
-      negativeMarking,
-      price,
-      discountPrice,
-      isPublished,
-      subjects,
-      isGrandTest,
-      scheduledFor,
-    } = req.body;
+    try {
+        let {
+            category,
+            subcategory,
+            title,
+            description,
+            durationMinutes,
+            totalQuestions: formTotalQuestions, // Rename to avoid conflict
+            totalMarks,
+            negativeMarking,
+            price,
+            discountPrice,
+            isPublished,
+            subjects,
+            isGrandTest,
+            scheduledFor,
+        } = req.body;
 
-    // Convert slug to ObjectId
-    const foundCategory = await Category.findOne({ slug: category });
-    if (!foundCategory) {
-      return res.status(400).json({ message: "Invalid category slug" });
+        // Convert slug to ObjectId
+        const foundCategory = await Category.findOne({ slug: category });
+        if (!foundCategory) {
+            return res.status(400).json({ message: "Invalid category slug" });
+        }
+        category = foundCategory._id; // Replace slug with ObjectId
+
+        const parsedSubjects = (
+            typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
+        ).map((s) => ({
+            ...s,
+            name: s.name.trim(),
+        }));
+
+        // 🔥 CRITICAL STEP 1: Generate the question IDs based on the parsedSubjects structure
+        const { questionIds, totalQuestions: generatedTotalQuestions } = 
+            await generateQuestionsForTest(parsedSubjects);
+        
+        // Use the total calculated from the actual questions found
+        const finalTotalQuestions = generatedTotalQuestions;
+
+
+        const mt = new MockTest({
+            category,
+            categorySlug: foundCategory.slug,
+            subcategory: subcategory.trim(),
+            title: title.trim(),
+            description: description.trim(),
+            durationMinutes,
+            totalQuestions: finalTotalQuestions, // Use the actual count
+            totalMarks,
+            negativeMarking,
+            price,
+            discountPrice,
+            isPublished: !!isPublished,
+            subjects: parsedSubjects,
+            isGrandTest: !!isGrandTest,
+            scheduledFor:
+                !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
+            
+            // 🔥 CRITICAL STEP 2: Save the generated list of Question IDs
+            questionIds: questionIds, 
+        });
+
+        await mt.save();
+
+        res.status(201).json(mt);
+    } catch (err) {
+        console.error(err);
+        res
+            .status(500)
+            .json({ message: "Create mocktest failed", error: err.message });
     }
-
-    // Replace slug with ObjectId
-    category = foundCategory._id;
-
-    const parsedSubjects = (
-      typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
-    ).map((s) => ({
-      ...s,
-      name: s.name.trim(),
-    }));
-
-    const mt = new MockTest({
-      category,
-      subcategory: subcategory.trim(),
-      title: title.trim(),
-      description: description.trim(),
-      durationMinutes,
-      totalQuestions,
-      totalMarks,
-      negativeMarking,
-      price,
-      discountPrice,
-      isPublished: !!isPublished,
-      subjects: parsedSubjects,
-      isGrandTest: !!isGrandTest,
-      scheduledFor:
-        !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
-    });
-
-    await mt.save();
-
-    res.status(201).json(mt);
-  } catch (err) {
-    console.error(err);
-    res
-      .status(500)
-      .json({ message: "Create mocktest failed", error: err.message });
-  }
 };
-
 // ✅ --- THIS IS THE UPDATE FUNCTION ---
-/* Update mocktest by id */
 export const updateMockTest = async (req, res) => {
-  try {
-    const { id } = req.params;
-    let updateData = req.body;
+    try {
+        const { id } = req.params;
+        let updateData = req.body;
 
-    // ✅ FIX: Convert category slug back to ObjectId before updating
-    if (
-      updateData.category &&
-      !mongoose.Types.ObjectId.isValid(updateData.category)
-    ) {
-      const foundCategory = await Category.findOne({
-        slug: updateData.category,
-      });
-      if (!foundCategory) {
-        return res.status(400).json({ message: "Invalid category slug" });
-      }
-      updateData.category = foundCategory._id;
+        // Convert category slug back to ObjectId before updating
+        if (
+            updateData.category &&
+            !mongoose.Types.ObjectId.isValid(updateData.category)
+        ) {
+            const foundCategory = await Category.findOne({
+                slug: updateData.category,
+            });
+            if (!foundCategory) {
+                return res.status(400).json({ message: "Invalid category slug" });
+            }
+            updateData.category = foundCategory._id;
+            updateData.categorySlug = foundCategory.slug;
+        }
+
+        // Trim strings just in case
+        if (updateData.subcategory)
+            updateData.subcategory = updateData.subcategory.trim();
+        if (updateData.title) updateData.title = updateData.title.trim();
+        if (updateData.description)
+            updateData.description = updateData.description.trim();
+
+        // Ensure subjects are parsed and trimmed
+        if (updateData.subjects) {
+            updateData.subjects = (
+                typeof updateData.subjects === "string"
+                    ? JSON.parse(updateData.subjects)
+                    : updateData.subjects || []
+            ).map((s) => ({
+                ...s,
+                name: s.name.trim(),
+            }));
+            
+            // 🔥 CRITICAL STEP: RE-GENERATE questions if subjects structure changed
+            const { questionIds, totalQuestions } = 
+                await generateQuestionsForTest(updateData.subjects);
+            
+            updateData.questionIds = questionIds;
+            updateData.totalQuestions = totalQuestions;
+        }
+
+
+        const updatedMockTest = await MockTest.findByIdAndUpdate(id, updateData, {
+            new: true, // Return the modified document
+            runValidators: true, // Run schema validators
+        });
+
+        if (!updatedMockTest) {
+            return res.status(404).json({ message: "MockTest not found" });
+        }
+
+        res.status(200).json(updatedMockTest);
+    } catch (err) {
+        console.error("Error updating mocktest:", err);
+        res
+            .status(500)
+            .json({ message: "Failed to update mocktest", error: err.message });
     }
-
-    // ✅ Trim strings just in case
-    if (updateData.subcategory)
-      updateData.subcategory = updateData.subcategory.trim();
-    if (updateData.title) updateData.title = updateData.title.trim();
-    if (updateData.description)
-      updateData.description = updateData.description.trim();
-
-    // ✅ Ensure subjects are parsed and trimmed
-    if (updateData.subjects) {
-      updateData.subjects = (
-        typeof updateData.subjects === "string"
-          ? JSON.parse(updateData.subjects)
-          : updateData.subjects || []
-      ).map((s) => ({
-        ...s,
-        name: s.name.trim(),
-      }));
-    }
-
-    const updatedMockTest = await MockTest.findByIdAndUpdate(id, updateData, {
-      new: true, // Return the modified document
-      runValidators: true, // Run schema validators
-    });
-
-    if (!updatedMockTest) {
-      return res.status(404).json({ message: "MockTest not found" });
-    }
-
-    res.status(200).json(updatedMockTest);
-  } catch (err) {
-    console.error("Error updating mocktest:", err);
-    res
-      .status(500)
-      .json({ message: "Failed to update mocktest", error: err.message });
-  }
 };
 // ✅ --- END OF UPDATE FUNCTION ---
+export const submitMockTest = async (req, res) => {
+    try {
+        const { userId, answers } = req.body;
+        const mocktest = await MockTest.findById(req.params.id);
+        if (!mocktest)
+            return res.status(404).json({ message: "MockTest not found" });
 
+        // Get the list of question IDs submitted by the student
+        const submittedQuestionIds = answers.map(ans => ans.questionId);
+
+        // Fetch the corresponding questions from the global Question collection
+        const questions = await Question.find({
+            _id: { $in: submittedQuestionIds }
+        }).select('correct correctManualAnswer marks negative');
+
+        // Create a map for quick lookup: { 'questionId': { correct: [...], marks: X, ... } }
+        const questionMap = questions.reduce((map, q) => {
+            map[q._id.toString()] = q;
+            return map;
+        }, {});
+
+        let totalScore = 0;
+        const finalAnswers = [];
+
+        for (const ans of answers) {
+            const qDoc = questionMap[ans.questionId];
+
+            if (qDoc) {
+                let isCorrect = false;
+                const questionMarks = qDoc.marks || 1;
+                const negativeMarks = mocktest.negativeMarking || 0;
+
+                if (qDoc.questionType === 'mcq') {
+                    // Assuming selectedAnswer is an array of indices [0, 2] or a single index string "0"
+                    const studentAnswers = Array.isArray(ans.selectedAnswer) 
+                        ? ans.selectedAnswer.map(i => Number(i))
+                        : (typeof ans.selectedAnswer === 'string' 
+                            ? ans.selectedAnswer.split(',').map(i => Number(i.trim())) 
+                            : [Number(ans.selectedAnswer)]
+                        ).filter(i => !isNaN(i));
+
+                    // Check if the student's answers exactly match the correct answers
+                    const correctAnswers = qDoc.correct.map(Number);
+                    
+                    isCorrect = (
+                        studentAnswers.length === correctAnswers.length &&
+                        studentAnswers.every(val => correctAnswers.includes(val))
+                    );
+
+                } else if (qDoc.questionType === 'manual') {
+                    // Simple string comparison for manual answers (can be expanded for fuzzy matching)
+                    isCorrect = ans.selectedAnswer?.trim().toLowerCase() === qDoc.correctManualAnswer?.trim().toLowerCase();
+                }
+
+                if (isCorrect) {
+                    totalScore += questionMarks;
+                } else {
+                    totalScore -= negativeMarks;
+                }
+                
+                finalAnswers.push({
+                    questionId: ans.questionId,
+                    selectedAnswer: ans.selectedAnswer,
+                    isCorrect: isCorrect,
+                });
+            }
+        }
+
+        const attempt = {
+            userId,
+            answers: finalAnswers,
+            score: totalScore,
+            submittedAt: new Date(),
+        };
+
+        mocktest.attempts.push(attempt);
+        await mocktest.save();
+
+        res
+            .status(200)
+            .json({ message: "Test submitted successfully", score: totalScore });
+    } catch (err) {
+        console.error('Error submitting test:', err);
+        res
+            .status(500)
+            .json({ message: "Error submitting test", error: err.message });
+    }
+};
 /* Get mocktest by id */
 export const getMockTestById = async (req, res) => {
-  try {
-    const mocktest = await MockTest.findById(req.params.id).populate(
-      "category",
-      "name slug"
-    );
+    try {
+        const mocktest = await MockTest.findById(req.params.id).populate(
+            "category",
+            "name slug"
+        );
 
-    if (!mocktest) {
-      return res.status(404).json({ message: "MockTest not found" });
+        if (!mocktest) {
+            return res.status(404).json({ message: "MockTest not found" });
+        }
+
+        // Note: The UI will need to explicitly fetch the actual questions via a different route 
+        // using the mocktest.questionIds array, as this response no longer embeds questions.
+        res.json(mocktest);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
     }
-
-    res.json(mocktest);
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 };
 
 /* Add single question */
@@ -441,44 +587,7 @@ export const getPublishedMockTests = async (req, res) => {
   }
 };
 
-// ✅ Submit Test (Student)
-export const submitMockTest = async (req, res) => {
-  try {
-    const { userId, answers } = req.body;
-    const mocktest = await MockTest.findById(req.params.id);
-    if (!mocktest)
-      return res.status(404).json({ message: "MockTest not found" });
 
-    let totalScore = 0;
-    answers.forEach((ans) => {
-      const q = mocktest.questions.id(ans.questionId);
-      if (q) {
-        const correct = q.correctAnswer === ans.selectedAnswer;
-        ans.isCorrect = correct;
-        if (correct) totalScore += q.marks || 1;
-        else totalScore -= mocktest.negativeMarking || 0;
-      }
-    });
-
-    const attempt = {
-      userId,
-      answers,
-      score: totalScore,
-      submittedAt: new Date(),
-    };
-
-    mocktest.attempts.push(attempt);
-    await mocktest.save();
-
-    res
-      .status(200)
-      .json({ message: "Test submitted successfully", score: totalScore });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "Error submitting test", error: err.message });
-  }
-};
 
 export const getMockTests = async (req, res) => {
   try {

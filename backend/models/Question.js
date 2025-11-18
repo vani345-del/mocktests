@@ -39,7 +39,7 @@ const questionSchema = new mongoose.Schema(
     marks: { type: Number, default: 1 },
     negative: { type: Number, default: 0 },
     difficulty: { type: String, enum: ["easy", "medium", "hard"], default: "easy" },
-    category: { type: String, required: true }, // like Maths, GK, etc.
+    category: { type: String, required: true }, // **This 'category' is the subject ID/name**
     tags: [String], // optional tags
   },
   { timestamps: true }

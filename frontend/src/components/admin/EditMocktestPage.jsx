@@ -1,150 +1,155 @@
-// frontend/src/components/admin/EditMocktestPage.jsx
+// frontend/src/components/admin/EditMocktestPage.jsx - FULL UPDATED CODE
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { toast } from "react-toastify";
-import { FaUpload, FaPlusCircle, FaSave, FaArrowLeft } from "react-icons/fa";
+import { toast } from "react-hot-toast"; // Changed from 'react-toastify' to 'react-hot-toast' for consistency
+import { FaUpload, FaSave, FaArrowLeft } from "react-icons/fa";
+
+// NOTE: This component is largely redundant if FormMocktest is used for editing,
+// but kept here for completeness with minor updates.
 
 const EditMocktestPage = () => {
-  const { id } = useParams();
-  const [mocktest, setMocktest] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
-  const serverURL = import.meta.env.VITE_SERVER_URL;
+    const { id } = useParams();
+    const [mocktest, setMocktest] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const navigate = useNavigate();
+    const serverURL = import.meta.env.VITE_SERVER_URL;
 
-  useEffect(() => {
-    const fetchMocktest = async () => {
-      try {
-        const res = await axios.get(`${serverURL}api/admin/mocktests/${id}`);
-        setMocktest(res.data);
-      } catch (err) {
-        toast.error("Failed to load mocktest details");
-      }
+    useEffect(() => {
+        const fetchMocktest = async () => {
+            try {
+                // Assuming this hits the same /api/admin/mocktests/:id endpoint
+                const res = await axios.get(`${serverURL}api/admin/mocktests/${id}`);
+                setMocktest(res.data);
+            } catch (err) {
+                toast.error("Failed to load mocktest details");
+            }
+        };
+        fetchMocktest();
+    }, [id, serverURL]);
+
+    const handleChange = (e) => {
+        setMocktest({ ...mocktest, [e.target.name]: e.target.value });
     };
-    fetchMocktest();
-  }, [id, serverURL]);
 
-  const handleChange = (e) => {
-    setMocktest({ ...mocktest, [e.target.name]: e.target.value });
-  };
+    const handleSave = async () => {
+        setLoading(true);
+        try {
+            // NOTE: This save will only update the metadata. It does NOT regenerate questions 
+            // unless the subjects array is explicitly passed and changed. 
+            // The FormMocktest component handles subject changes more completely.
+            await axios.put(`${serverURL}api/admin/mocktests/${id}`, mocktest);
+            toast.success("Mocktest metadata updated successfully!");
+            navigate(-1);
+        } catch (err) {
+            toast.error("Failed to update mocktest");
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  const handleSave = async () => {
-    setLoading(true);
-    try {
-      // Send the 'mocktest' object. It now has the correct keys
-      // (durationMinutes, negativeMarking) that the backend expects.
-      await axios.put(`${serverURL}api/admin/mocktests/${id}`, mocktest);
-      toast.success("Mocktest updated successfully!");
-      navigate(-1);
-    } catch (err) {
-      toast.error("Failed to update mocktest");
-    } finally {
-      setLoading(false);
-    }
-  };
+    if (!mocktest) return <p className="text-center mt-10">Loading...</p>;
 
-  if (!mocktest) return <p className="text-center mt-10">Loading...</p>;
+    return (
+        <div className="p-6 max-w-3xl mx-auto">
+            <button
+                onClick={() => navigate(-1)}
+                className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
+            >
+                <FaArrowLeft />
+                Back
+            </button>
 
-  return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <button
-        onClick={() => navigate(-1)}
-        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 mb-4 transition font-medium"
-      >
-        <FaArrowLeft />
-        Back
-      </button>
+            <h1 className="text-2xl font-semibold mb-6 text-gray-800">
+                Edit Mocktest: {mocktest.title}
+            </h1>
 
-      <h1 className="text-2xl font-semibold mb-6 text-gray-800">
-        Edit Mocktest: {mocktest.title}
-      </h1>
+            {/* Editable Form (simplified) */}
+            <div className="space-y-4 bg-white shadow rounded-lg p-5">
+                <input
+                    type="text"
+                    name="title"
+                    value={mocktest.title || ""}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded"
+                    placeholder="Title"
+                />
+                <input
+                    type="text"
+                    name="subcategory"
+                    value={mocktest.subcategory || ""}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded"
+                    placeholder="Subcategory"
+                />
+                <input
+                    type="number"
+                    name="durationMinutes"
+                    value={mocktest.durationMinutes || ""}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded"
+                    placeholder="Duration"
+                />
+                <input
+                    type="number"
+                    name="totalMarks"
+                    value={mocktest.totalMarks || ""}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded"
+                    placeholder="Total Marks"
+                />
+                <input
+                    type="number"
+                    name="negativeMarking"
+                    step="0.01"
+                    value={mocktest.negativeMarking || ""}
+                    onChange={handleChange}
+                    className="w-full border p-2 rounded"
+                    placeholder="Negative Marks"
+                />
 
-      {/* Editable Form */}
-      <div className="space-y-4 bg-white shadow rounded-lg p-5">
-        <input
-          type="text"
-          name="title"
-          value={mocktest.title || ""} // Add || "" for safety
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-          placeholder="Title"
-        />
-        <input
-          type="text"
-          name="subcategory"
-          value={mocktest.subcategory || ""} // Add || "" for safety
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-          placeholder="Subcategory"
-        />
+                <div className="flex justify-end">
+                    <button
+                        onClick={handleSave}
+                        disabled={loading}
+                        className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
+                    >
+                        <FaSave />
+                        {loading ? "Saving..." : "Save Metadata Changes"}
+                    </button>
+                </div>
+            </div>
 
-        {/* ✅ START OF FIX */}
-        <input
-          type="number"
-          name="durationMinutes" // 1. Name must match the data key
-          value={mocktest.durationMinutes || ""} // 2. Value must match the data key
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-          placeholder="Duration"
-        />
-        {/* ✅ END OF FIX */}
+            {/* Question Section - Updated to reflect auto-generation/global pool */}
+            <div className="mt-10 bg-white shadow rounded-lg p-5">
+                <h2 className="text-xl font-semibold mb-4">
+                    Manage Questions (Generated: {mocktest.totalQuestions || 0})
+                </h2>
+                <div className="text-sm text-gray-600 mb-4">
+                    Question list is determined by the Subject & Difficulty settings in the main edit form.
+                </div>
+                <div className="grid grid-cols-2 gap-5">
+                    <button
+                        // Navigate to a dedicated page to view the generated list
+                        onClick={() => navigate(`/admin/mocktests/${id}/questions/view`)} 
+                        className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-blue-500 p-6 rounded-xl cursor-pointer transition"
+                    >
+                        {/* FaPlusCircle is generic, but the action is now 'View/Review' */}
+                        <span className="text-blue-600 font-bold text-3xl">👁️</span> 
+                        <span className="text-gray-700 font-medium">Review Generated Questions</span>
+                    </button>
 
-        <input
-          type="number"
-          name="totalMarks"
-          value={mocktest.totalMarks || ""} // Add || "" for safety
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-          placeholder="Total Marks"
-        />
-
-        {/* ✅ START OF FIX */}
-        <input
-          type="number"
-          name="negativeMarking" // 1. Name must match the data key
-          step="0.01"
-          value={mocktest.negativeMarking || ""} // 2. Value must match the data key
-          onChange={handleChange}
-          className="w-full border p-2 rounded"
-          placeholder="Negative Marks"
-        />
-        {/* ✅ END OF FIX */}
-
-        <div className="flex justify-end">
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="bg-blue-600 text-white px-4 py-2 rounded flex items-center gap-2"
-          >
-            <FaSave />
-            {loading ? "Saving..." : "Save Changes"}
-          </button>
+                    <button
+                        onClick={() => toast.info("Bulk Upload to Global Question Pool!")}
+                        className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-green-500 p-6 rounded-xl cursor-pointer transition"
+                    >
+                        <FaUpload size={30} className="text-green-600" />
+                        <span className="text-gray-700 font-medium">Bulk Upload to Pool</span>
+                    </button>
+                </div>
+            </div>
         </div>
-      </div>
-
-      {/* Question Section */}
-      <div className="mt-10 bg-white shadow rounded-lg p-5">
-        <h2 className="text-xl font-semibold mb-4">Manage Questions</h2>
-        <div className="grid grid-cols-2 gap-5">
-          <button
-            onClick={() => toast.info("Add Question Form Coming Soon!")}
-            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-blue-500 p-6 rounded-xl cursor-pointer transition"
-          >
-            <FaPlusCircle size={30} className="text-blue-600" />
-            <span className="text-gray-700 font-medium">Add Each Question</span>
-          </button>
-
-          <button
-            onClick={() => toast.info("Bulk Upload Coming Soon!")}
-            className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 hover:border-green-500 p-6 rounded-xl cursor-pointer transition"
-          >
-            <FaUpload size={30} className="text-green-600" />
-            <span className="text-gray-700 font-medium">Bulk Upload</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default EditMocktestPage;

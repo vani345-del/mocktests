@@ -5,6 +5,15 @@ import mongoose from "mongoose";
 import Usermodel from "../models/Usermodel.js";
 import Order from '../models/Order.js';
 
+// Helper function for array randomization (Fisher-Yates shuffle)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
 // -----------------------------------------------------------------------------
 // 1️⃣ Get Available Mocktests
 // -----------------------------------------------------------------------------
@@ -26,6 +35,7 @@ export const getAvailableMocktests = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // 2️⃣ Start a Mocktest Attempt (AUTH REQUIRED)
+// -----------------------------------------------------------------------------
 export const startMocktest = async (req, res) => {
   try {
     const { mocktestId } = req.params;
@@ -44,19 +54,20 @@ export const startMocktest = async (req, res) => {
       status: 'successful'
     });
 
+    let examEndTime;
+    const now = new Date();
+    
     // If it's a paid test (price > 0) AND it's NOT a Grand Test, check for purchase
     // We assume Grand Tests are *always* paid, so we check for all paid tests
     if (mocktest.price > 0 && !order) {
       return res.status(403).json({ success: false, message: "You have not purchased this test. Please buy it first." });
     }
     
-    let examEndTime;
-    const now = new Date();
     // B. Check if it's a Grand Test and if the time is correct
     if (mocktest.isGrandTest) {
       const startTime = new Date(mocktest.scheduledFor);
       // Calculate end time (start time + duration)
-      const endTime = new Date(startTime.getTime() + mocktest.durationMinutes * 60000);
+      examEndTime = new Date(startTime.getTime() + mocktest.durationMinutes * 60000);
 
       if (now < startTime) {
         return res.status(403).json({
@@ -65,7 +76,7 @@ export const startMocktest = async (req, res) => {
         });
       }
 
-      if (now > endTime) {
+      if (now > examEndTime) {
         return res.status(403).json({ success: false, message: 'The time window for this Grand Test has closed.' });
       }
 
@@ -78,7 +89,6 @@ export const startMocktest = async (req, res) => {
     // --- 👆 END OF ACCESS CONTROL LOGIC ---
 
 
-    // --- Your existing logic for fetching questions ---
     let questionsForAttempt = [];
 
     // 1. Aggregate counts for each subject
@@ -94,17 +104,43 @@ export const startMocktest = async (req, res) => {
       counts.hard += hard;
     }
 
-    // Helper function to fetch questions
+    // Helper function to fetch questions (Queries global Question collection with randomization)
     const fetchQuestions = async (subjectName, difficulty, count) => {
       if (count <= 0) return [];
-      // Your Question.js model uses 'category' for the subject name
-      return Question.aggregate([
+      
+      const aggregationPipeline = [
+        // 1. Match questions by category and difficulty
         { $match: { category: subjectName, difficulty: difficulty } },
+        // 2. Select a random sample of the required size
         { $sample: { size: count } }
-      ]);
+      ];
+
+      const selectedQuestions = await Question.aggregate(aggregationPipeline);
+      
+      // Map global Question data to the embedded format expected by Attempt model's questions array.
+      return selectedQuestions.map(q => {
+          // Map options array of objects to array of text strings 
+          const optionsText = Array.isArray(q.options) 
+              ? q.options.map(opt => opt.text).filter(t => t != null) 
+              : [];
+              
+          return {
+              _id: q._id,
+              subject: q.category, 
+              level: q.difficulty,
+              questionText: q.title,
+              options: optionsText,
+              correct: q.correct, // Array of indices
+              marks: q.marks,
+              negative: q.negative,
+              explanation: q.explanation || null,
+              questionType: q.questionType || 'mcq',
+              correctManualAnswer: q.correctManualAnswer || null
+          };
+      });
     };
 
-    // 2. Create an array of promises
+    // 2. Create an array of promises and fetch questions
     const fetchPromises = [];
     for (const [name, counts] of subjectMap.entries()) {
       fetchPromises.push(fetchQuestions(name, "easy", counts.easy));
@@ -112,38 +148,49 @@ export const startMocktest = async (req, res) => {
       fetchPromises.push(fetchQuestions(name, "hard", counts.hard));
     }
 
-    // 3. Run all fetches in parallel
+    // 3. Run all fetches in parallel and combine results
     const allQuestionArrays = await Promise.all(fetchPromises);
-    questionsForAttempt = allQuestionArrays.flat(); // Combine all results
-    // --- End of your existing logic ---
+    questionsForAttempt = allQuestionArrays.flat();
 
     if (questionsForAttempt.length === 0) {
-      return res.status(400).json({ success: false, message: "No questions found for this test configuration. Make sure you have uploaded questions to the global pool." });
+      // Fallback to manually embedded questions if no breakdown worked
+      if (mocktest.questions && mocktest.questions.length > 0) {
+        questionsForAttempt = mocktest.questions;
+      } else {
+        return res.status(400).json({ success: false, message: "No questions found for this test configuration. Ensure questions matching the subject quotas are uploaded to the global pool." });
+      }
     }
 
-    // Shuffle the final array
-    // Shuffle the final array
-    questionsForAttempt.sort(() => Math.random() - 0.5);
+    // Shuffle the final array to mix up subjects/difficulties
+    questionsForAttempt = shuffleArray(questionsForAttempt);
     
+    // Determine endsAt time
     const endsAt = mocktest.isGrandTest ? examEndTime : new Date(now.getTime() + mocktest.durationMinutes * 60000);
 
     const attempt = await Attempt.create({
       studentId,
       mocktestId,
-      questions: questionsForAttempt,
+      questions: questionsForAttempt, // The array of question objects
       startedAt: now,
       endsAt: endsAt,
       status: "in-progress"
     });
+    
     // --- 3. ADD ATTEMPT TO USER MODEL ---
-    // This makes sure the "Tests Completed" count on the dashboard is accurate
     await Usermodel.findByIdAndUpdate(studentId, { $push: { attempts: attempt._id } });
     // --- 👆 END OF NEW LOGIC ---
+
+    // Prepare questions for client (omitting correct answers)
+    const safeQuestions = questionsForAttempt.map(q => {
+        const { correct, correctAnswer, negative, correctManualAnswer, ...safeQ } = q;
+        return safeQ;
+    });
 
     res.json({ 
       success: true, 
       attemptId: attempt._id, 
-      endsAt: endsAt 
+      endsAt: endsAt,
+      questions: safeQuestions // Return the questions directly
     });
 
   } catch (err) {
@@ -157,14 +204,9 @@ export const startMocktest = async (req, res) => {
 export const submitMocktest = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    // ⭐ Ensure answers are in the format: [{ questionId, selectedAnswer }]
-    //    Your MockTest.js model had `correctAnswer` as a String,
-    //    but Question.js had `correct` as a [Number] index.
-    //    The code below assumes `Question.js` is the correct source,
-    //    and that `q.correct` is an array of correct *indices*.
-    //    This code assumes single-choice answers (q.correct[0]).
     const { answers } = req.body; 
 
+    // Find the attempt and manually populate the 'questions' array with the *embedded* question data
     const attempt = await Attempt.findById(attemptId);
     if (!attempt)
       return res.status(404).json({ success: false, message: "Attempt not found" });
@@ -182,30 +224,58 @@ export const submitMocktest = async (req, res) => {
       const userAnswer = answers.find((a) => a.questionId === q._id.toString());
       
       let isCorrect = false;
-      const selectedAnswer = userAnswer ? userAnswer.selectedAnswer : null; // `selectedAnswer` is the *string* of the chosen option
+      const selectedAnswer = userAnswer ? userAnswer.selectedAnswer : null; 
 
-      // Find the index of the selected answer
-      const selectedIndex = q.options.indexOf(selectedAnswer);
+      if (q.questionType === 'mcq') {
+          // Find the index of the selected answer string in the options array
+          const selectedIndex = Array.isArray(q.options) ? q.options.findIndex(optText => optText === selectedAnswer) : -1;
+          
+          // Check if the selected index is in the correct indices array (q.correct)
+          if (userAnswer && q.correct && q.correct.includes(selectedIndex)) {
+            score += q.marks;
+            correctCount++;
+            isCorrect = true;
+          } else if (userAnswer && selectedAnswer) {
+            // Apply negative marking only if an answer was given
+            score -= q.negative;
+          }
 
-      if (userAnswer && q.correct.includes(selectedIndex)) {
-        score += q.marks;
-        correctCount++;
-        isCorrect = true;
-      } else if (userAnswer) {
-        // Apply negative marking only if an answer was given
-        score -= q.negative;
+          processedAnswers.push({
+            questionId: q._id.toString(),
+            selectedAnswer: selectedAnswer,
+            correctAnswer: q.options[q.correct[0]], // Assuming single correct answer for display
+            isCorrect: isCorrect,
+            marks: q.marks,
+            negativeMarks: q.negative,
+            questionText: q.questionText || q.title,
+            options: q.options
+          });
+      } else if (q.questionType === 'manual') {
+          // Manual question auto-grading based on exact match (case-insensitive and trimmed for robustness)
+          const isManualCorrect = userAnswer && 
+                                  userAnswer.selectedAnswer &&
+                                  q.correctManualAnswer &&
+                                  userAnswer.selectedAnswer.toString().trim().toLowerCase() === q.correctManualAnswer.toString().trim().toLowerCase();
+
+          if (isManualCorrect) {
+             score += q.marks;
+             correctCount++;
+             isCorrect = true;
+          } else if (userAnswer && userAnswer.selectedAnswer) {
+             // Apply negative marking for incorrect manual answer
+             score -= q.negative;
+          }
+          
+          processedAnswers.push({
+            questionId: q._id.toString(),
+            selectedAnswer: userAnswer ? userAnswer.selectedAnswer : null,
+            correctAnswer: q.correctManualAnswer,
+            isCorrect: isCorrect,
+            marks: q.marks,
+            negativeMarks: q.negative,
+            questionText: q.questionText || q.title,
+          });
       }
-
-      processedAnswers.push({
-        questionId: q._id.toString(),
-        selectedAnswer: selectedAnswer,
-        correctAnswer: q.options[q.correct[0]], // Assuming single correct answer
-        isCorrect: isCorrect,
-        marks: q.marks,
-        negativeMarks: q.negative,
-        questionText: q.title,
-        options: q.options
-      });
     });
 
     attempt.score = score;
@@ -295,7 +365,7 @@ export const getAttemptById = async (req, res) => {
     // Don't send correct answers to the client
     const questions = attempt.questions.map(q => {
       // Create a copy of the question and remove the 'correct' field
-      const { correct, ...rest } = q; 
+      const { correct, correctAnswer, negative, correctManualAnswer, ...rest } = q; 
       return rest;
     });
 

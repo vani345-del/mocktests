@@ -1,46 +1,53 @@
-// frontend/src/components/admin/CreateMocktestPage.jsx
+// frontend/src/components/admin/CreateMocktestPage.jsx - FINAL VERSION
 import React from "react";
 import { useDispatch } from "react-redux";
 import { useParams, useNavigate } from "react-router-dom";
 import { createMockTest } from "../../redux/mockTestSlice";
 import FormMocktest from "./FormMocktest";
+import { toast } from "react-hot-toast";
 
 export default function CreateMocktestPage() {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-  const { category } = useParams();
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    // Assuming URL looks like /admin/mocktests/new/:categorySlug
+    const { category } = useParams(); 
 
-  const handleCreateTest = async (payload, publish) => {
-    // This is the logic that used to be inside FormMocktest
-    try {
-      const resultAction = await dispatch(
-        createMockTest({ ...payload, isPublished: publish })
-      );
-      if (createMockTest.fulfilled.match(resultAction)) {
-        const id = resultAction.payload._id;
-        // Navigate to the "add questions" page for the new test
-        navigate(`/admin/mocktests/${id}/new/questions`); 
-      } else {
-        const errorMsg = resultAction.payload?.message || "Failed to create mock test";
-        alert(errorMsg);
-        // Re-throw to be caught by FormMocktest's internal handler
-        throw new Error(errorMsg);
-      }
-    } catch (err) {
-      console.error(err);
-      // Re-throw to be caught by FormMocktest's internal handler
-      throw err;
+    const handleCreateTest = async (payload, publish) => {
+        try {
+            toast.loading("Creating mock test...");
+            const resultAction = await dispatch(
+                createMockTest({ ...payload, isPublished: publish })
+            );
+            toast.dismiss();
+
+            if (createMockTest.fulfilled.match(resultAction)) {
+                toast.success("Mock test created! Questions automatically generated.");
+                navigate(`/admin/mocktests/${payload.category}`); 
+                
+            } else {
+                const errorMsg = resultAction.payload?.message || "Failed to create mock test";
+                toast.error(errorMsg);
+                throw new Error(errorMsg);
+            }
+        } catch (err) {
+            console.error(err);
+            throw err;
+        }
+    };
+
+    const initialData = { category: category };
+
+    // ⚠️ CRITICAL CHECK: Don't render FormMocktest if the category is missing.
+    // This stabilizes the 'initialData' and ensures the necessary props exist.
+    if (!category) {
+        return <div className="text-center mt-10 text-white">Loading category...</div>;
     }
-  };
 
-  // Pass the category from the URL as part of the initialData
-  const initialData = { category: category };
-
-  return (
-    <FormMocktest
-      formTitle="Create Mock Test"
-      onSubmitHandler={handleCreateTest}
-      initialData={initialData}
-    />
-  );
+    return (
+        <FormMocktest
+            formTitle="Create Mock Test"
+            onSubmitHandler={handleCreateTest} 
+            initialData={initialData}
+        />
+    );
 }

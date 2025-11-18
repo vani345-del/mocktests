@@ -90,79 +90,88 @@ export const getMocktestsByCategory = async (req, res) => {
 };
 
 /* Create mocktest (Stage 1) */
+// backend/controllers/mockTestController.js (replace createMockTest)
 export const createMockTest = async (req, res) => {
-    try {
-        let {
-            category,
-            subcategory,
-            title,
-            description,
-            durationMinutes,
-            totalQuestions: formTotalQuestions, // Rename to avoid conflict
-            totalMarks,
-            negativeMarking,
-            price,
-            discountPrice,
-            isPublished,
-            subjects,
-            isGrandTest,
-            scheduledFor,
-        } = req.body;
+  try {
+    let {
+      category,
+      subcategory = "",
+      title = "",
+      description = "",
+      durationMinutes = 0,
+      totalQuestions: formTotalQuestions,
+      totalMarks = 0,
+      negativeMarking = 0,
+      price = 0,
+      discountPrice = 0,
+      isPublished = false,
+      subjects = [],
+      isGrandTest = false,
+      scheduledFor,
+    } = req.body;
 
-        // Convert slug to ObjectId
-        const foundCategory = await Category.findOne({ slug: category });
-        if (!foundCategory) {
-            return res.status(400).json({ message: "Invalid category slug" });
-        }
-        category = foundCategory._id; // Replace slug with ObjectId
+    console.log("createMockTest called. incoming category:", category);
 
-        const parsedSubjects = (
-            typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
-        ).map((s) => ({
-            ...s,
-            name: s.name.trim(),
-        }));
-
-        // 🔥 CRITICAL STEP 1: Generate the question IDs based on the parsedSubjects structure
-        const { questionIds, totalQuestions: generatedTotalQuestions } = 
-            await generateQuestionsForTest(parsedSubjects);
-        
-        // Use the total calculated from the actual questions found
-        const finalTotalQuestions = generatedTotalQuestions;
-
-
-        const mt = new MockTest({
-            category,
-            categorySlug: foundCategory.slug,
-            subcategory: subcategory.trim(),
-            title: title.trim(),
-            description: description.trim(),
-            durationMinutes,
-            totalQuestions: finalTotalQuestions, // Use the actual count
-            totalMarks,
-            negativeMarking,
-            price,
-            discountPrice,
-            isPublished: !!isPublished,
-            subjects: parsedSubjects,
-            isGrandTest: !!isGrandTest,
-            scheduledFor:
-                !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
-            
-            // 🔥 CRITICAL STEP 2: Save the generated list of Question IDs
-            questionIds: questionIds, 
-        });
-
-        await mt.save();
-
-        res.status(201).json(mt);
-    } catch (err) {
-        console.error(err);
-        res
-            .status(500)
-            .json({ message: "Create mocktest failed", error: err.message });
+    // Validate required fields early
+    if (!category) {
+      return res.status(400).json({ message: "Category (slug) is required" });
     }
+    if (!title || !String(title).trim()) {
+      return res.status(400).json({ message: "Title is required" });
+    }
+
+    // Convert slug to ObjectId
+    const foundCategory = await Category.findOne({ slug: category });
+    if (!foundCategory) {
+      return res.status(400).json({ message: "Invalid category slug" });
+    }
+    const categoryId = foundCategory._id; // Use this for MockTest
+
+    // Ensure subjects is parsed
+    const parsedSubjects = (
+      typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
+    ).map((s) => ({
+      name: (s.name || "").trim(),
+      easy: Number(s.easy) || 0,
+      medium: Number(s.medium) || 0,
+      hard: Number(s.hard) || 0,
+    }));
+
+    // Generate question IDs (returns arrays, may be empty)
+    const { questionIds, totalQuestions: generatedTotalQuestions } =
+      await generateQuestionsForTest(parsedSubjects);
+
+    const finalTotalQuestions = generatedTotalQuestions || 0;
+
+    const mt = new MockTest({
+      category: categoryId,
+      categorySlug: foundCategory.slug,
+      subcategory: String(subcategory || "").trim(),
+      title: String(title).trim(),
+      description: String(description || "").trim(),
+      durationMinutes: Number(durationMinutes) || 0,
+      totalQuestions: finalTotalQuestions,
+      totalMarks: Number(totalMarks) || 0,
+      negativeMarking: Number(negativeMarking) || 0,
+      price: Number(price) || 0,
+      discountPrice: Number(discountPrice) || 0,
+      isPublished: !!isPublished,
+      subjects: parsedSubjects,
+      isGrandTest: !!isGrandTest,
+      scheduledFor: !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
+      questionIds: questionIds || [],
+    });
+
+    await mt.save();
+
+    // Return a consistent shape
+    return res.status(201).json({ mocktest: mt });
+  } catch (err) {
+    console.error("createMockTest ERROR:", err);
+    return res.status(500).json({ message: "Create mocktest failed", error: err.message });
+  }
 };
+
 // ✅ --- THIS IS THE UPDATE FUNCTION ---
 export const updateMockTest = async (req, res) => {
     try {
@@ -337,48 +346,51 @@ export const getMockTestById = async (req, res) => {
     }
 };
 
-/* Add single question */
 export const addQuestion = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      subject,
-      level,
-      questionText,
-      options,
-      correctAnswer,
-      marks,
-      negativeMarks,
-      explanation,
-    } = req.body;
+    const { subject, level, questionText, options, correct, correctManualAnswer, questionType = "mcq", marks, negative, explanation } = req.body;
 
     const mt = await MockTest.findById(id);
     if (!mt) return res.status(404).json({ message: "MockTest not found" });
 
-    const q = {
-      subject: subject.trim(),
-      level: level.trim().toLowerCase(), // normalize level
-      questionText: questionText.trim(),
-      options: Array.isArray(options) ? options : JSON.parse(options),
-      correctAnswer,
+    const files = req.files || {};
+    const getFileUrl = (field) => (files[field] ? files[field][0].path.replace(/\\/g, "/") : null);
+
+    const newQuestionData = {
+      questionType,
+      title: questionText?.trim(),
+      difficulty: (level || "easy").toLowerCase(),
+      category: subject?.trim(),
       marks: Number(marks || 1),
-      negativeMarks: Number(negativeMarks || 0),
-      explanation: explanation ? explanation.trim() : "",
+      negative: Number(negative || 0),
+      explanation: explanation?.trim() || "",
+      questionImageUrl: getFileUrl("questionImage")
     };
 
-    mt.questions.push(q);
+    if (questionType === "mcq") {
+      const rawOptions = Array.isArray(options) ? options : JSON.parse(options || "[]");
+      newQuestionData.options = rawOptions.map((opt, i) => ({
+        text: typeof opt === "string" ? opt : (opt.text || ""),
+        imageUrl: getFileUrl(`optionImage${i}`)
+      }));
 
-    // optional: recalc totals
-    mt.totalQuestions = mt.questions.length;
-    mt.totalMarks = mt.questions.reduce((s, qq) => s + (qq.marks || 1), 0);
+      newQuestionData.correct = Array.isArray(correct) ? correct.map(Number) : JSON.parse(correct || "[]").map(Number);
+    } else {
+      newQuestionData.correctManualAnswer = correctManualAnswer?.trim();
+    }
 
+    const qDoc = new Question(newQuestionData);
+    await qDoc.save();
+
+    mt.questionIds.push(qDoc._id);
+    mt.totalQuestions = mt.questionIds.length;
+    mt.totalMarks = (mt.totalMarks || 0) + (qDoc.marks || 1);
     await mt.save();
-    res.status(201).json({
-      message: "Question added",
-      question: mt.questions[mt.questions.length - 1],
-    });
+
+    res.status(201).json({ message: "Question added successfully with images", questionId: qDoc._id, question: qDoc });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error in addQuestion:", err);
     res.status(500).json({ message: err.message });
   }
 };
@@ -391,18 +403,16 @@ export const bulkUploadQuestions = async (req, res) => {
     if (!filePath) throw new Error("No file uploaded");
 
     let parsedRows = [];
-
-    // Read file
     if (filePath.endsWith(".xlsx") || filePath.endsWith(".xls")) {
       const workbook = xlsx.readFile(filePath);
       const sheetName = workbook.SheetNames[0];
       parsedRows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
-    } else if (filePath.endsWith(".csv")) {
+    } else {
       const csvData = [];
       await new Promise((resolve, reject) => {
         fs.createReadStream(filePath)
           .pipe(csv())
-          .on("data", (row) => csvData.push(row))
+          .on("data", row => csvData.push(row))
           .on("end", resolve)
           .on("error", reject);
       });
@@ -414,108 +424,69 @@ export const bulkUploadQuestions = async (req, res) => {
 
     for (const row of parsedRows) {
       const clean = {};
-      // Normalize headers to lowercase, remove spaces, and trim values
-      Object.keys(row).forEach((key) => {
-        const cleanKey = key.replace(/\s+/g, "").toLowerCase();
-        clean[cleanKey] = (typeof row[key] === 'string') ? row[key].trim() : row[key];
+      Object.keys(row).forEach(k => {
+        const kk = k.replace(/\s+/g, "").toLowerCase();
+        clean[kk] = typeof row[k] === "string" ? row[k].trim() : row[k];
       });
 
-      const questionType = clean.questiontype === 'manual' ? 'manual' : 'mcq';
-
-      // --- Base validation ---
-      if (
-        !clean.question ||
-        !clean.subject ||
-        !clean.level
-      ) {
-        errors.push({
-          row: row,
-          error: "Missing required fields (Question, Subject, or Level)",
-        });
+      if (!clean.question || !clean.subject || !clean.level) {
+        errors.push({ row, error: "Missing required fields" });
         continue;
       }
-      
-      const newQuestion = {
+
+      const qType = clean.questiontype === "manual" ? "manual" : "mcq";
+      const base = {
+        questionType: qType,
         title: clean.question,
-        questionType: questionType,
         questionImageUrl: clean.questionimageurl || null,
         category: clean.subject,
         difficulty: clean.level.toLowerCase(),
         marks: Number(clean.marks) || 1,
         negative: Number(clean.negative) || 0,
-        tags: clean.tags ? clean.tags.split(',').map(t => t.trim()) : [],
+        tags: clean.tags ? clean.tags.split(",").map(t => t.trim()) : []
       };
 
-      if (questionType === 'mcq') {
-        // --- MCQ Validation ---
+      if (qType === "mcq") {
         const options = [
           { text: clean.optiona_text, imageUrl: clean.optiona_image },
           { text: clean.optionb_text, imageUrl: clean.optionb_image },
           { text: clean.optionc_text, imageUrl: clean.optionc_image },
           { text: clean.optiond_text, imageUrl: clean.optiond_image },
-          { text: clean.optione_text, imageUrl: clean.optione_image },
-        ].filter(opt => opt.text || opt.imageUrl); // Keep if it has text OR an image
+          { text: clean.optione_text, imageUrl: clean.optione_image }
+        ].filter(o => o.text || o.imageUrl);
 
-        if (options.length < 2) {
-           errors.push({ row: row, error: "MCQ questions must have at least 2 options (with text or image)." });
-           continue;
-        }
-        
-        if (clean.correctindex == null || clean.correctindex === '') { // Check for null or empty string
-           errors.push({ row: row, error: "MCQ questions must have a 'correctIndex' (e.g., 0)." });
-           continue;
-        }
+        if (options.length < 2) { errors.push({ row, error: "Not enough options" }); continue; }
+        const correctIndexes = String(clean.correctindex || "").split(",").map(x => parseInt(x.trim(), 10)).filter(n => !isNaN(n));
+        if (!correctIndexes.length) { errors.push({ row, error: "No correct index" }); continue; }
 
-        // Support multiple correct answers, e.g., "0,2"
-        const correctIndexes = String(clean.correctindex)
-          .split(',')
-          .map(i => parseInt(i.trim(), 10))
-          .filter(i => !isNaN(i) && i >= 0 && i < options.length);
-          
-        if (correctIndexes.length === 0) {
-           errors.push({ row: row, error: `Invalid correctIndex '${clean.correctindex}'. Must be a number (or comma-separated numbers) corresponding to an option.` });
-           continue;
-        }
-        
-        newQuestion.options = options;
-        newQuestion.correct = correctIndexes;
-
+        base.options = options;
+        base.correct = correctIndexes;
       } else {
-        // --- Manual Validation ---
-        if (!clean.correctmanualanswer) {
-          errors.push({ row: row, error: "Manual questions must have a 'correctManualAnswer'." });
-          continue;
-        }
-        newQuestion.correctManualAnswer = clean.correctmanualanswer;
+        if (!clean.correctmanualanswer) { errors.push({ row, error: "Manual missing correctManualAnswer" }); continue; }
+        base.correctManualAnswer = clean.correctmanualanswer;
       }
 
-      validQuestions.push(newQuestion);
+      validQuestions.push(base);
     }
 
     if (!validQuestions.length) {
       fs.unlinkSync(filePath);
-      return res.status(400).json({
-        message: "No valid questions found in file.",
-        errors: errors,
-        firstParsedRow: parsedRows[0],
-      });
+      return res.status(400).json({ message: "No valid questions found", errors });
     }
 
-    // Insert new questions into the global Question collection
-    await Question.insertMany(validQuestions);
-
+    // Insert and optionally attach
+    const inserted = await Question.insertMany(validQuestions);
     fs.unlinkSync(filePath);
 
-    res.status(201).json({
-      message: `${validQuestions.length} valid questions uploaded successfully to the global pool.`,
-      errors: errors,
-    });
+    if (req.params?.id) {
+      const ids = inserted.map(i => i._id);
+      await MockTest.findByIdAndUpdate(req.params.id, { $push: { questionIds: { $each: ids } }, $inc: { totalQuestions: ids.length } });
+    }
+
+    res.status(201).json({ message: `${inserted.length} questions uploaded`, errors });
   } catch (err) {
-    console.error("Error bulk upload:", err);
-    res.status(500).json({
-      message: "Error uploading questions",
-      error: err.stack || err.message,
-    });
+    console.error("❌ Error bulk upload:", err);
+    res.status(500).json({ message: err.message });
   }
 };
 

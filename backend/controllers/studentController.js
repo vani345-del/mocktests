@@ -35,272 +35,290 @@ export const getAvailableMocktests = async (req, res) => {
 
 // -----------------------------------------------------------------------------
 // 2️⃣ Start a Mocktest Attempt (AUTH REQUIRED)
-// -----------------------------------------------------------------------------
 export const startMocktest = async (req, res) => {
   try {
     const { mocktestId } = req.params;
     const studentId = req.user.id;
 
     const mocktest = await MockTest.findById(mocktestId);
-    if (!mocktest) {
+    if (!mocktest)
       return res.status(404).json({ success: false, message: "Mocktest not found" });
-    }
-    
-    // --- 👇 2. ADDED ACCESS CONTROL LOGIC ---
-    // A. Check if user has purchased this test
+
+    // ----------------------------------------------------
+    // 📌 ACCESS CONTROL
+    // ----------------------------------------------------
     const order = await Order.findOne({
       user: studentId,
-      items: mocktestId, // Check if mocktestId is in the 'items' array
-      status: 'successful'
+      items: mocktestId,
+      status: "successful",
     });
 
-    let examEndTime;
     const now = new Date();
-    
-    // If it's a paid test (price > 0) AND it's NOT a Grand Test, check for purchase
-    // We assume Grand Tests are *always* paid, so we check for all paid tests
+    let examEndTime;
+
     if (mocktest.price > 0 && !order) {
-      return res.status(403).json({ success: false, message: "You have not purchased this test. Please buy it first." });
+      return res.status(403).json({
+        success: false,
+        message: "You have not purchased this test.",
+      });
     }
-    
-    // B. Check if it's a Grand Test and if the time is correct
+
     if (mocktest.isGrandTest) {
       const startTime = new Date(mocktest.scheduledFor);
-      // Calculate end time (start time + duration)
-      examEndTime = new Date(startTime.getTime() + mocktest.durationMinutes * 60000);
+      examEndTime = new Date(
+        startTime.getTime() + mocktest.durationMinutes * 60000
+      );
 
       if (now < startTime) {
         return res.status(403).json({
           success: false,
-          message: `This Grand Test is not available yet. It starts at ${startTime.toLocaleString()}`
+          message: `This Grand Test starts at ${startTime.toLocaleString()}`,
         });
       }
 
       if (now > examEndTime) {
-        return res.status(403).json({ success: false, message: 'The time window for this Grand Test has closed.' });
+        return res.status(403).json({
+          success: false,
+          message: "Time window for this Grand Test is closed.",
+        });
       }
-
+    } else {
+      examEndTime = new Date(
+        now.getTime() + mocktest.durationMinutes * 60000
+      );
     }
-    else {
-      // For regular mock tests, the end time is relative to when they start
-      examEndTime = new Date(now.getTime() + mocktest.durationMinutes * 60000);
-    }
-    // --
-    // --- 👆 END OF ACCESS CONTROL LOGIC ---
 
-
+    // ----------------------------------------------------
+    // 📌 HYBRID QUESTION SELECTION
+    // ----------------------------------------------------
     let questionsForAttempt = [];
 
-    // 1. Aggregate counts for each subject
-    const subjectMap = new Map();
-    for (const subject of mocktest.subjects) {
-      const { name, easy, medium, hard } = subject;
-      if (!subjectMap.has(name)) {
-        subjectMap.set(name, { easy: 0, medium: 0, hard: 0 });
-      }
-      const counts = subjectMap.get(name);
-      counts.easy += easy;
-      counts.medium += medium;
-      counts.hard += hard;
-    }
+    // ------- 1️⃣ USE ADMIN ATTACHED QUESTIONS FIRST -------
+    if (Array.isArray(mocktest.questionIds) && mocktest.questionIds.length > 0) {
+      const qs = await Question.find({
+        _id: { $in: mocktest.questionIds },
+      }).lean();
 
-    // Helper function to fetch questions (Queries global Question collection with randomization)
-    const fetchQuestions = async (subjectName, difficulty, count) => {
-      if (count <= 0) return [];
-      
-      const aggregationPipeline = [
-        // 1. Match questions by category and difficulty
-        { $match: { category: subjectName, difficulty: difficulty } },
-        // 2. Select a random sample of the required size
-        { $sample: { size: count } }
-      ];
+      // preserve admin order
+      const map = {};
+      qs.forEach((q) => (map[q._id.toString()] = q));
 
-      const selectedQuestions = await Question.aggregate(aggregationPipeline);
-      
-      // Map global Question data to the embedded format expected by Attempt model's questions array.
-      return selectedQuestions.map(q => {
-          // Map options array of objects to array of text strings 
-          const optionsText = Array.isArray(q.options) 
-              ? q.options.map(opt => opt.text).filter(t => t != null) 
-              : [];
-              
-          return {
-              _id: q._id,
-              subject: q.category, 
-              level: q.difficulty,
-              questionText: q.title,
-              options: optionsText,
-              correct: q.correct, // Array of indices
-              marks: q.marks,
-              negative: q.negative,
-              explanation: q.explanation || null,
-              questionType: q.questionType || 'mcq',
-              correctManualAnswer: q.correctManualAnswer || null
-          };
-      });
-    };
+      const ordered = mocktest.questionIds
+        .map((id) => map[id.toString()])
+        .filter(Boolean);
 
-    // 2. Create an array of promises and fetch questions
-    const fetchPromises = [];
-    for (const [name, counts] of subjectMap.entries()) {
-      fetchPromises.push(fetchQuestions(name, "easy", counts.easy));
-      fetchPromises.push(fetchQuestions(name, "medium", counts.medium));
-      fetchPromises.push(fetchQuestions(name, "hard", counts.hard));
-    }
+      questionsForAttempt = ordered.map((q) => ({
+        _id: q._id,
+        subject: q.category,
+        level: q.difficulty,
+        questionText: q.title,
+        questionImageUrl: q.questionImageUrl || null,
+        options: (q.options || []).map((opt) => ({
+          text: opt.text || "",
+          imageUrl: opt.imageUrl || null,
+        })),
+        correct: q.correct,
+        marks: q.marks,
+        negative: q.negative,
+        explanation: q.explanation || null,
+        questionType: q.questionType || "mcq",
+        correctManualAnswer: q.correctManualAnswer || null,
+      }));
+    } // 👈 THIS BRACE WAS MISSING IN YOUR CODE!
 
-    // 3. Run all fetches in parallel and combine results
-    const allQuestionArrays = await Promise.all(fetchPromises);
-    questionsForAttempt = allQuestionArrays.flat();
-
+    // ------- 2️⃣ FALLBACK: SUBJECT + DIFFICULTY SELECTION -------
     if (questionsForAttempt.length === 0) {
-      // Fallback to manually embedded questions if no breakdown worked
-      if (mocktest.questions && mocktest.questions.length > 0) {
-        questionsForAttempt = mocktest.questions;
-      } else {
-        return res.status(400).json({ success: false, message: "No questions found for this test configuration. Ensure questions matching the subject quotas are uploaded to the global pool." });
+      const subjectMap = new Map();
+
+      for (const sub of mocktest.subjects || []) {
+        const { name, easy = 0, medium = 0, hard = 0 } = sub;
+
+        if (!subjectMap.has(name)) {
+          subjectMap.set(name, { easy: 0, medium: 0, hard: 0 });
+        }
+
+        const s = subjectMap.get(name);
+        s.easy += Number(easy);
+        s.medium += Number(medium);
+        s.hard += Number(hard);
       }
+
+      const fetchQuestions = async (subjectName, difficulty, count) => {
+        if (count <= 0) return [];
+
+        const selected = await Question.aggregate([
+          { $match: { category: subjectName, difficulty } },
+          { $sample: { size: count } },
+        ]);
+
+        return selected.map((q) => ({
+          _id: q._id,
+          subject: q.category,
+          level: q.difficulty,
+          questionText: q.title,
+          questionImageUrl: q.questionImageUrl || null,
+          options: (q.options || []).map((opt) => ({
+            text: opt.text || "",
+            imageUrl: opt.imageUrl || null,
+          })),
+          correct: q.correct,
+          marks: q.marks,
+          negative: q.negative,
+          explanation: q.explanation || null,
+          questionType: q.questionType,
+          correctManualAnswer: q.correctManualAnswer || null,
+        }));
+      };
+
+      const promises = [];
+
+      for (const [name, counts] of subjectMap.entries()) {
+        promises.push(fetchQuestions(name, "easy", counts.easy));
+        promises.push(fetchQuestions(name, "medium", counts.medium));
+        promises.push(fetchQuestions(name, "hard", counts.hard));
+      }
+
+      const arrays = await Promise.all(promises);
+
+      questionsForAttempt = arrays.flat();
     }
 
-    // Shuffle the final array to mix up subjects/difficulties
-    questionsForAttempt = shuffleArray(questionsForAttempt);
-    
-    // Determine endsAt time
-    const endsAt = mocktest.isGrandTest ? examEndTime : new Date(now.getTime() + mocktest.durationMinutes * 60000);
+    // No questions
+    if (!questionsForAttempt.length) {
+      return res.status(400).json({
+        success: false,
+        message: "No questions found for this test.",
+      });
+    }
 
+    // Shuffle
+    questionsForAttempt = shuffleArray(questionsForAttempt);
+
+    const endsAt = mocktest.isGrandTest
+      ? examEndTime
+      : new Date(now.getTime() + mocktest.durationMinutes * 60000);
+
+    // ----------------------------------------------------
+    // 📌 CREATE ATTEMPT
+    // ----------------------------------------------------
     const attempt = await Attempt.create({
       studentId,
       mocktestId,
-      questions: questionsForAttempt, // The array of question objects
+      questions: questionsForAttempt,
+      answers: [],
       startedAt: now,
-      endsAt: endsAt,
-      status: "in-progress"
-    });
-    
-    // --- 3. ADD ATTEMPT TO USER MODEL ---
-    await Usermodel.findByIdAndUpdate(studentId, { $push: { attempts: attempt._id } });
-    // --- 👆 END OF NEW LOGIC ---
-
-    // Prepare questions for client (omitting correct answers)
-    const safeQuestions = questionsForAttempt.map(q => {
-        const { correct, correctAnswer, negative, correctManualAnswer, ...safeQ } = q;
-        return safeQ;
+      endsAt,
+      status: "in-progress",
     });
 
-    res.json({ 
-      success: true, 
-      attemptId: attempt._id, 
-      endsAt: endsAt,
-      questions: safeQuestions // Return the questions directly
+    await Usermodel.findByIdAndUpdate(studentId, {
+      $push: { attempts: attempt._id },
     });
 
+    // Remove correct answers from frontend
+    const safeQuestions = questionsForAttempt.map((q) => {
+      const { correct, correctManualAnswer, ...rest } = q;
+      return rest;
+    });
+
+    return res.json({
+      success: true,
+      attemptId: attempt._id,
+      endsAt,
+      questions: safeQuestions,
+    });
   } catch (err) {
     console.error("❌ Error in startMocktest:", err);
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
-// -----------------------------------------------------------------------------
-// 3️⃣ Submit Mocktest Answers
-// -----------------------------------------------------------------------------
+
+
+
 export const submitMocktest = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const { answers } = req.body; 
+    const { answers } = req.body; // array
 
-    // Find the attempt and manually populate the 'questions' array with the *embedded* question data
     const attempt = await Attempt.findById(attemptId);
-    if (!attempt)
-      return res.status(404).json({ success: false, message: "Attempt not found" });
-
-    if (attempt.status === "completed") {
-      return res.status(400).json({ success: false, message: "Test already submitted." });
-    }
+    if (!attempt) return res.status(404).json({ success: false, message: "Attempt not found" });
+    if (attempt.status === "completed") return res.status(400).json({ success: false, message: "Test already submitted." });
 
     let score = 0;
     let correctCount = 0;
-    let processedAnswers = []; // To store the results
+    const processedAnswers = [];
 
-    attempt.questions.forEach((q) => {
-      // Find the user's answer for this question
-      const userAnswer = answers.find((a) => a.questionId === q._id.toString());
-      
+    const attemptQuestions = attempt.questions || [];
+
+    for (const q of attemptQuestions) {
+      const userAns = Array.isArray(answers) ? answers.find(a => a.questionId === q._id.toString()) : null;
+      const selectedAnswer = userAns ? userAns.selectedAnswer : null;
       let isCorrect = false;
-      const selectedAnswer = userAnswer ? userAnswer.selectedAnswer : null; 
 
-      if (q.questionType === 'mcq') {
-          // Find the index of the selected answer string in the options array
-          const selectedIndex = Array.isArray(q.options) ? q.options.findIndex(optText => optText === selectedAnswer) : -1;
-          
-          // Check if the selected index is in the correct indices array (q.correct)
-          if (userAnswer && q.correct && q.correct.includes(selectedIndex)) {
-            score += q.marks;
-            correctCount++;
-            isCorrect = true;
-          } else if (userAnswer && selectedAnswer) {
-            // Apply negative marking only if an answer was given
-            score -= q.negative;
-          }
+      if (q.questionType === "mcq") {
+        // q.options are objects; q.correct contains indices
+        // selectedAnswer is expected to be either option text or option index depending on frontend; we normalized frontend to send option text for simplicity
+        // Find index of selectedAnswer in options (matching on text)
+        const selectedIndex = q.options && q.options.length ? q.options.findIndex(o => {
+          if (typeof selectedAnswer === "string") return (o.text || "").toString() === selectedAnswer.toString();
+          return Number(selectedAnswer) === (o.index || -1);
+        }) : -1;
 
-          processedAnswers.push({
-            questionId: q._id.toString(),
-            selectedAnswer: selectedAnswer,
-            correctAnswer: q.options[q.correct[0]], // Assuming single correct answer for display
-            isCorrect: isCorrect,
-            marks: q.marks,
-            negativeMarks: q.negative,
-            questionText: q.questionText || q.title,
-            options: q.options
-          });
-      } else if (q.questionType === 'manual') {
-          // Manual question auto-grading based on exact match (case-insensitive and trimmed for robustness)
-          const isManualCorrect = userAnswer && 
-                                  userAnswer.selectedAnswer &&
-                                  q.correctManualAnswer &&
-                                  userAnswer.selectedAnswer.toString().trim().toLowerCase() === q.correctManualAnswer.toString().trim().toLowerCase();
+        if (userAns && q.correct && q.correct.includes(selectedIndex)) {
+          score += q.marks || 0;
+          correctCount++;
+          isCorrect = true;
+        } else if (userAns && selectedAnswer != null) {
+          score -= q.negative || 0;
+        }
 
-          if (isManualCorrect) {
-             score += q.marks;
-             correctCount++;
-             isCorrect = true;
-          } else if (userAnswer && userAnswer.selectedAnswer) {
-             // Apply negative marking for incorrect manual answer
-             score -= q.negative;
-          }
-          
-          processedAnswers.push({
-            questionId: q._id.toString(),
-            selectedAnswer: userAnswer ? userAnswer.selectedAnswer : null,
-            correctAnswer: q.correctManualAnswer,
-            isCorrect: isCorrect,
-            marks: q.marks,
-            negativeMarks: q.negative,
-            questionText: q.questionText || q.title,
-          });
+        processedAnswers.push({
+          questionId: q._id.toString(),
+          selectedAnswer,
+          correctAnswer: q.options && q.options[q.correct && q.correct[0]] ? q.options[q.correct[0]].text : null,
+          isCorrect,
+          marks: q.marks,
+          negativeMarks: q.negative,
+          questionText: q.questionText
+        });
+      } else if (q.questionType === "manual") {
+        const isManualCorrect = userAns && selectedAnswer && q.correctManualAnswer &&
+          selectedAnswer.toString().trim().toLowerCase() === q.correctManualAnswer.toString().trim().toLowerCase();
+
+        if (isManualCorrect) {
+          score += q.marks || 0;
+          correctCount++;
+          isCorrect = true;
+        } else if (userAns && selectedAnswer) {
+          score -= q.negative || 0;
+        }
+
+        processedAnswers.push({
+          questionId: q._id.toString(),
+          selectedAnswer,
+          correctAnswer: q.correctManualAnswer,
+          isCorrect,
+          marks: q.marks,
+          negativeMarks: q.negative,
+          questionText: q.questionText
+        });
       }
-    });
+    }
 
     attempt.score = score;
     attempt.correctCount = correctCount;
     attempt.status = "completed";
     attempt.submittedAt = new Date();
-    attempt.answers = processedAnswers; // Store the processed answers
-
+    attempt.answers = processedAnswers;
     await attempt.save();
 
-    res.json({
-      success: true,
-      score,
-      correctCount,
-      total: attempt.questions.length,
-      attemptId: attempt._id
-    });
+    res.json({ success: true, score, correctCount, total: attempt.questions.length, attemptId: attempt._id });
   } catch (err) {
     console.error("❌ Error in submitMocktest:", err);
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
-// -----------------------------------------------------------------------------
-// 4️⃣ Get My Purchased Mocktests
-// -----------------------------------------------------------------------------
+
 export const getMyPurchasedTests = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -337,35 +355,20 @@ export const getMyPurchasedTests = async (req, res) => {
 export const getAttemptById = async (req, res) => {
   try {
     const { attemptId } = req.params;
-    const studentId = req.user.id; 
+    const studentId = req.user.id;
 
     if (!mongoose.Types.ObjectId.isValid(attemptId)) {
       return res.status(400).json({ success: false, message: "Invalid attempt ID" });
     }
 
-    const attempt = await Attempt.findById(attemptId)
-                                .populate('mocktestId', 'title'); 
+    const attempt = await Attempt.findById(attemptId).populate("mocktestId", "title");
+    if (!attempt) return res.status(404).json({ success: false, message: "Attempt not found" });
+    if (attempt.studentId.toString() !== studentId) return res.status(403).json({ success: false, message: "Not authorized" });
+    if (attempt.status === "completed") return res.status(400).json({ success: false, message: "Test already completed.", redirectTo: `/student/results/${attempt._id}` });
 
-    if (!attempt) {
-      return res.status(404).json({ success: false, message: "Attempt not found" });
-    }
-
-    if (attempt.studentId.toString() !== studentId) {
-      return res.status(403).json({ success: false, message: "Not authorized to view this attempt" });
-    }
-    
-    if (attempt.status === 'completed') {
-       return res.status(400).json({ 
-         success: false, 
-         message: "Test already completed.",
-         redirectTo: `/student/results/${attempt._id}` 
-       });
-    }
-    
-    // Don't send correct answers to the client
-    const questions = attempt.questions.map(q => {
-      // Create a copy of the question and remove the 'correct' field
-      const { correct, correctAnswer, negative, correctManualAnswer, ...rest } = q; 
+    const safeAnswers = Array.isArray(attempt.answers) ? attempt.answers : [];
+    const questions = (attempt.questions || []).map(q => {
+      const { correct, correctManualAnswer, ...rest } = q;
       return rest;
     });
 
@@ -374,16 +377,12 @@ export const getAttemptById = async (req, res) => {
       mocktestId: attempt.mocktestId,
       endsAt: attempt.endsAt,
       status: attempt.status,
-      questions: questions,
-      answers: (attempt.answers || []).map(a => ({ 
-        questionId: a.questionId, 
-        selectedAnswer: a.selectedAnswer 
-      }))
+      questions,
+      answers: safeAnswers.map(a => ({ questionId: a.questionId, selectedAnswer: a.selectedAnswer }))
     });
-
   } catch (err) {
     console.error("❌ Error in getAttemptById:", err);
-    res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: err.message });
   }
 };
 

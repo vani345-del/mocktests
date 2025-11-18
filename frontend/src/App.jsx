@@ -11,32 +11,31 @@ import Login from "./pages/Login";
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
+
 import AdminLayout from "./components/admin/AdminLayout";
 import DashboardPage from "./components/admin/DashboardPage";
 import ManageInstructors from "./components/admin/ManageInstructors";
 import ManageStudents from "./components/admin/ManageStudents";
 import ManageMocktests from "./components/admin/ManageMocktests";
-import WriteMocktest from "./pages/student/WriteMocktest";
+
 import CategoryPage from "./components/admin/CategoryPage";
-// 🛑 import EditMocktestPage from "./components/admin/EditMocktestPage"; // No longer needed
+import CreateMocktestPage from "./components/admin/CreateMocktestPage";
+import FormMocktest from "./components/admin/FormMocktest";
 import AdminQuestions from "./components/admin/AdminQuestions";
+
+import WriteMocktest from "./pages/student/WriteMocktest";
+import InstructionsPage from "./pages/student/InstructionsPage";
+import StuDashboard from "./pages/student/StuDashboard";
+
 import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
-import { Toaster } from 'react-hot-toast';
-import InstructionsPage from "./pages/student/InstructionsPage";
-// 🛑 import CreateMocktestPage from "./components/admin/CreateMocktestPage"; // No longer needed
-import FormMocktest from "./components/admin/FormMocktest"; // ✅ Import main form
 
-// Import the student dashboard
-import StuDashboard from "./pages/student/StuDashboard"; 
+import { Toaster } from "react-hot-toast";
 
-// Layout for public routes
 const MainLayout = ({ children }) => {
   const location = useLocation();
-
-  // Hide Navbar/Footer on login, signup, and admin pages
   const hideLayout =
     location.pathname.startsWith("/admin") ||
     location.pathname === "/login" ||
@@ -44,7 +43,7 @@ const MainLayout = ({ children }) => {
 
   return (
     <>
-    <Toaster position="top-center" reverseOrder={false} />
+      <Toaster position="top-center" reverseOrder={false} />
       {!hideLayout && <Navbar />}
       <main className="min-h-[80vh]">{children}</main>
       {!hideLayout && <Footer />}
@@ -62,14 +61,14 @@ const App = () => {
 
       <MainLayout>
         <Routes>
-          {/* Public routes */}
+          {/* ---------------- PUBLIC ROUTES ---------------- */}
           <Route path="/" element={<Home />} />
+
           <Route
             path="/signup"
             element={!userData ? <Signup /> : <Navigate to="/" replace />}
           />
 
-          {/* --- 1. UPDATED LOGIN ROUTE --- */}
           <Route
             path="/login"
             element={
@@ -77,67 +76,51 @@ const App = () => {
                 <Login />
               ) : userData.role === "admin" ? (
                 <Navigate to="/admin" replace />
+              ) : userData.purchasedTests?.length > 0 ? (
+                <Navigate to="/student-dashboard" replace />
               ) : (
-                // [ --- NEW LOGIC HERE --- ]
-                // Check if student has purchased tests.
-                // If yes (length > 0), go to dashboard.
-                // If no (length === 0), go to the public mocktests list.
-                userData.purchasedTests && userData.purchasedTests.length > 0 ? (
-                  <Navigate to="/student-dashboard" replace />
-                ) : (
-                  <Navigate to="/mocktests" replace />
-                )
+                <Navigate to="/mocktests" replace />
               )
             }
           />
-          <Route 
-            path="/student/instructions/:mocktestId" 
-            element={
-              userData ? <InstructionsPage /> : <Navigate to="/login" replace />
-            }
+
+          <Route
+            path="/student/instructions/:mocktestId"
+            element={userData ? <InstructionsPage /> : <Navigate to="/login" replace />}
           />
 
-           <Route 
-            path="/student/test/:attemptId" 
-            element={
-              userData ? <WriteMocktest /> : <Navigate to="/login" replace />
-            } 
+          <Route
+            path="/student/test/:attemptId"
+            element={userData ? <WriteMocktest /> : <Navigate to="/login" replace />}
           />
-           <Route path="/mocktests" element={<AllMockTests />} />
-           <Route path="/mocktests/:id" element={<MockTestDetail />} /> 
 
-          {/* --- Cart & Checkout Routes (No change needed here) --- */}
+          <Route path="/mocktests" element={<AllMockTests />} />
+          <Route path="/mocktests/:id" element={<MockTestDetail />} />
+
           <Route path="/cart" element={<Cart />} />
-          <Route 
-            path="/checkout" 
-            element={
-              userData ? <Checkout /> : <Navigate to="/login" replace />
-            } 
+
+          <Route
+            path="/checkout"
+            element={userData ? <Checkout /> : <Navigate to="/login" replace />}
           />
 
-          {/* --- 2. UPDATED STUDENT DASHBOARD ROUTE --- */}
+          {/* ---------------- STUDENT DASHBOARD ---------------- */}
           <Route
             path="/student-dashboard"
             element={
-              // First, check if user is a logged-in student
-              userData && userData.role === 'student' ? (
-                // [ --- NEW LOGIC HERE --- ]
-                // If they are a student, check if they have purchased tests.
-                // If yes, show the dashboard.
-                userData.purchasedTests && userData.purchasedTests.length > 0 ? (
+              userData?.role === "student" ? (
+                userData.purchasedTests?.length > 0 ? (
                   <StuDashboard />
                 ) : (
-                  // If no, redirect them to the mocktests list.
                   <Navigate to="/mocktests" replace />
                 )
               ) : (
-                // If not a logged-in student, send to login
                 <Navigate to="/login" replace />
               )
             }
           />
 
-          {/* ✅ Admin layout (Sidebar + nested pages) */}
+          {/* ---------------- ADMIN ROUTES ---------------- */}
           <Route
             path="/admin"
             element={
@@ -148,30 +131,38 @@ const App = () => {
               )
             }
           >
+            {/* ADMIN HOME */}
             <Route index element={<DashboardPage />} />
+
             <Route path="instructors" element={<ManageInstructors />} />
             <Route path="students" element={<ManageStudents />} />
-             <Route path="/admin/mocktests" element={<ManageMocktests />} />
-            <Route path="/admin/mocktests/:category" element={<CategoryPage />} />
-            
-            {/* --- ✅ UPDATED EDIT ROUTE --- */}
-            {/* This route now points to FormMocktest */}
-            <Route 
-              path="/admin/mocktests/:category/edit/:id" 
+
+            {/* -------- MOCKTESTS -------- */}
+            <Route path="mocktests" element={<ManageMocktests />} />
+
+            {/* List page for category */}
+            <Route path="mocktests/:category" element={<CategoryPage />} />
+
+            {/* Create new mocktest */}
+            <Route
+              path="mocktests/:category/new"
+              element={<CreateMocktestPage />}
+            />
+
+            {/* Edit mocktest */}
+            <Route
+              path="mocktests/:category/edit/:id"
               element={<FormMocktest />}
             />
-            
-            <Route path="/admin/mocktests/:id/new/questions" element={<AdminQuestions />} />
-            
-            {/* --- ✅ UPDATED CREATE ROUTE --- */}
-            {/* This route also points to FormMocktest */}
-            <Route 
-              path="/admin/categories/:category/new" 
-              element={<FormMocktest />}
+
+            {/* Manage questions */}
+            <Route
+              path="mocktests/:id/questions"
+              element={<AdminQuestions />}
             />
           </Route>
 
-          {/* Fallback */}
+          {/* ---------------- FALLBACK ---------------- */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </MainLayout>

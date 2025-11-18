@@ -14,31 +14,23 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
 import api from "../../api/axios";
 import { ClipLoader } from "react-spinners";
-// 🛑 No need to import FormMocktest here, it's handled by the router
-// import FormMocktest from "./FormMocktest"; 
-// 🛑 You are not using useSelector here, so it can be removed
-// import { useSelector } from "react-redux"; 
 
 export default function CategoryPage() {
-  const { category } = useParams();
+  const { category } = useParams(); // <-- Correct slug
   const navigate = useNavigate();
 
-  // ✅ --- FIX 1: Use useState for mocktests and loading ---
   const [mocktests, setMocktests] = useState([]);
   const [loading, setLoading] = useState(true);
-  // 🛑 --- REMOVE THIS LINE ---
-  // const { mocktests } = useSelector(state => state.whatever);
 
-  // ✅ --- FIX 2: Update getMocktests to use state setters ---
   const getMocktests = async () => {
-    setLoading(true); // Set loading to true before fetching
+    setLoading(true);
     try {
       const res = await api.get(`api/admin/mocktests?category=${category}`);
-      setMocktests(res.data); // Correctly uses the state setter
+      setMocktests(res.data);
     } catch (err) {
       toast.error("Failed to fetch mocktests");
     } finally {
-      setLoading(false); // Set loading to false after fetch (success or fail)
+      setLoading(false);
     }
   };
 
@@ -51,7 +43,7 @@ export default function CategoryPage() {
     try {
       await api.delete(`api/admin/mocktests/${id}`);
       toast.success("🗑️ Mocktest deleted successfully!");
-      getMocktests(); // Re-fetch tests after deleting
+      getMocktests();
     } catch {
       toast.error("❌ Failed to delete mocktest");
     }
@@ -61,7 +53,7 @@ export default function CategoryPage() {
     try {
       const res = await api.put(`api/admin/mocktests/${id}/publish`);
       toast.success(res.data.message);
-      getMocktests(); // Re-fetch tests after toggling
+      getMocktests();
     } catch {
       toast.error("⚠️ Failed to update publish status");
     }
@@ -78,7 +70,7 @@ export default function CategoryPage() {
         Back to All Categories
       </Link>
 
-      {/* Header Section */}
+      {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-center mb-10">
         <h1 className="text-4xl font-bold text-gray-800 capitalize text-center sm:text-left tracking-tight">
           {category}{" "}
@@ -86,15 +78,17 @@ export default function CategoryPage() {
             Mocktests
           </span>
         </h1>
+
+        {/* ✅ FIXED Create Button (NO categorySlug) */}
         <Link
-          to={`/admin/categories/${category}/new`}
+          to={`/admin/mocktests/${category}/new`}
           className="mt-5 sm:mt-0 flex items-center gap-2 px-5 py-3 rounded-lg text-white font-semibold bg-gradient-to-r from-blue-600 to-cyan-500 hover:opacity-90 shadow-lg transition-all"
         >
           <FaPlus /> Create Mocktest
         </Link>
       </div>
 
-      {/* ✅ --- FIX 3: Add a loading state --- */}
+      {/* Loading */}
       {loading ? (
         <div className="flex justify-center items-center min-h-[50vh]">
           <ClipLoader size={50} color={"#2563EB"} />
@@ -128,12 +122,8 @@ export default function CategoryPage() {
                   whileHover={{ y: -5 }}
                   className="group relative bg-white border border-slate-200 rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 overflow-hidden"
                 >
-                  {/* Accent Highlight */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-cyan-400/5 to-transparent opacity-0 group-hover:opacity-100 transition duration-500"></div>
-
-                  {/* Card Content */}
                   <div className="relative p-6 flex flex-col h-full justify-between">
-                    {/* Top: Title + Status */}
+                    {/* Title */}
                     <div>
                       <div className="flex justify-between items-start">
                         <h3 className="text-lg font-semibold text-slate-800 leading-snug">
@@ -157,7 +147,6 @@ export default function CategoryPage() {
                       </p>
                     </div>
 
-                    {/* Divider */}
                     <div className="mt-4 border-t border-slate-100"></div>
 
                     {/* Details */}
@@ -183,12 +172,11 @@ export default function CategoryPage() {
                       </p>
                     </div>
 
-                    {/* Divider */}
                     <div className="mt-4 border-t border-slate-100"></div>
 
                     {/* Actions */}
                     <div className="flex justify-between items-center mt-4">
-                      {/* --- Your new buttons from the previous step --- */}
+                      {/* Edit */}
                       <button
                         onClick={() =>
                           navigate(
@@ -199,17 +187,19 @@ export default function CategoryPage() {
                       >
                         <FaEdit />
                       </button>
+
+                      {/* Questions */}
                       <button
                         onClick={() =>
-                          navigate(`/admin/mocktests/${test._id}/new/questions`)
+                          navigate(`/admin/mocktests/${test._id}/questions`)
                         }
                         className="bg-green-500 text-white px-3 py-1 rounded ml-2 text-sm hover:bg-green-600"
                       >
                         Questions
                       </button>
-                      {/* --- End of new buttons --- */}
 
                       <div className="flex items-center gap-3">
+                        {/* Publish Toggle */}
                         <button
                           onClick={() => handleTogglePublish(test._id)}
                           title={test.isPublished ? "Unpublish" : "Publish"}
@@ -226,6 +216,7 @@ export default function CategoryPage() {
                           )}
                         </button>
 
+                        {/* Delete */}
                         <button
                           onClick={() => handleDelete(test._id)}
                           className="flex items-center gap-1 text-red-500 hover:text-red-600 font-medium text-sm transition"
@@ -235,9 +226,6 @@ export default function CategoryPage() {
                       </div>
                     </div>
                   </div>
-
-                  {/* Bottom Glow Accent */}
-                  <div className="absolute bottom-0 left-0 w-full h-[3px] bg-gradient-to-r from-blue-500 via-cyan-400 to-blue-500 opacity-0 group-hover:opacity-100 transition-all duration-500"></div>
                 </motion.div>
               ))}
             </motion.div>

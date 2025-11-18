@@ -10,60 +10,75 @@ import {
   deleteMockTest,
   getPublishedMockTests,
   submitMockTest,
-  getMockTests,
   getMocktestsByCategory,
   createGlobalQuestion,
 } from "../controllers/mockTestController.js";
-// --- ✅ FIX: Import uploadQuestionImages here --
+
 import { isAuth } from "../middleware/isAuth.js";
 import { uploadFile, uploadQuestionImages } from "../middleware/upload.js";
 
 const router = express.Router();
 
-// --- ADMIN ROUTES ---
+/* ===========================================================
+   FIXED ROUTE ORDER (MOST IMPORTANT PART)
+   1️⃣ Static & specific routes first
+   2️⃣ Then upload routes
+   3️⃣ Then global question routes
+   4️⃣ Dynamic :id routes ALWAYS LAST
+=========================================================== */
 
-// Specific routes MUST come before general /:id routes.
+/* -------------------- PUBLIC + STATIC ROUTES -------------------- */
 
-// POST /api/admin/mocktests
+// Create mocktest (admin)
 router.post("/", createMockTest);
 
-// GET /api/admin/mocktests (e.g., /api/admin/mocktests?category=ssc)
+// Fetch mocktests by category
 router.get("/", getMocktestsByCategory);
 
-// POST /api/admin/mocktests/questions/bulk-upload
+// Get published mocktests (student)
+router.get("/published/list", getPublishedMockTests);
+
+
+/* -------------------- QUESTION UPLOAD ROUTES (Fixed) -------------------- */
+
+// 🔥 Global question (manual or MCQ)
+router.post(
+  "/questions",
+  isAuth,
+  uploadQuestionImages,
+  createGlobalQuestion
+);
+
+// 🔥 Bulk upload (CSV / XLSX)
 router.post(
   "/questions/bulk-upload",
   isAuth,
-  // --- FIX: Using 'uploadFile' here as well ---
   uploadFile.single("file"),
   bulkUploadQuestions
 );
 
-// ✅ --- THIS ROUTE WILL NOW WORK ---
-router.post(
-  "/questions",
-  isAuth,
-  uploadQuestionImages, // Use the middleware you already defined!
-  createGlobalQuestion // Use the new controller function
-);
 
-// GET /api/admin/mocktests/:id
-router.get("/:id", getMockTestById);
+/* -------------------- DYNAMIC ROUTES (MUST ALWAYS BE LAST) -------------------- */
 
-// PUT /api/admin/mocktests/:id
-router.put("/:id", updateMockTest);
+// Student submits a mock test
+router.post("/:id/submit", submitMockTest);
 
-// DELETE /api/admin/mocktests/:id
-router.delete("/:id", deleteMockTest);
-
-// PUT /api/admin/mocktests/:id/publish
-router.put("/:id/publish", togglePublish);
-
-// POST /api/admin/mocktests/:id/questions
+// Add question *directly* to this mocktest
 router.post("/:id/questions", addQuestion);
 
-// --- STUDENT ROUTES ---
-router.get("/published/list", getPublishedMockTests);
-router.post("/:id/submit", submitMockTest);
+// Get mocktest by ID
+router.get("/:id", getMockTestById);
+
+// Update mocktest
+router.put("/:id", updateMockTest);
+
+// Delete mocktest
+router.delete("/:id", deleteMockTest);
+
+// Toggle publish/unpublish
+router.put("/:id/publish", togglePublish);
+
+
+/* -------------------- EXPORT ROUTER -------------------- */
 
 export default router;

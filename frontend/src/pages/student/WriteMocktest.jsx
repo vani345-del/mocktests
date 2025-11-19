@@ -118,33 +118,42 @@ const WriteMocktest = () => {
   /* --------------------------------------
       SUBMIT TEST
   -------------------------------------- */
-  const handleSubmit = async () => {
-    if (!window.confirm("Are you sure you want to submit?")) return;
+const handleSubmit = async () => {
+  if (!window.confirm("Are you sure you want to submit?")) return;
 
-    setIsSubmitting(true);
-    const toastId = toast.loading("Submitting...");
+  setIsSubmitting(true);
+  const toastId = toast.loading("Submitting...");
 
-    const formatted = Object.entries(answers).map(([id, a]) => ({
-      questionId: id,
-      selectedAnswer:
-        a.manual?.trim() !== ""
-          ? a.manual
-          : a.selected?.length
-          ? a.selected[0]
-          : null,
-    }));
+  const formatted = Object.entries(answers).map(([id, a]) => ({
+    questionId: id,
+    selectedAnswer:
+      a.manual?.trim() !== ""
+        ? a.manual
+        : a.selected?.length
+        ? a.selected[0]
+        : null,
+  }));
+ 
 
-    try {
-      await api.post(`/api/student/submit-test/${attemptId}`, {
-        answers: formatted,
-      });
-      toast.success("Submitted!", { id: toastId });
-      navigate("/student-dashboard");
-    } catch (err) {
-      toast.error("Error submitting", { id: toastId });
-      setIsSubmitting(false);
-    }
-  };
+
+ try {
+  await api.post(`/api/admin/mocktests/${attempt.mocktestId._id}/submit`, {
+  userId: attempt.userId,
+  answers: formatted,
+});
+
+  toast.success("Submitted!", { id: toastId });
+  navigate("/student-dashboard");
+} catch (err) {
+  toast.error("Error submitting test", { id: toastId });
+  setIsSubmitting(false);
+}
+
+    
+};
+
+
+
 
   const handleTimeUp = () => {
     toast.error("Time up! Auto-submitting...");

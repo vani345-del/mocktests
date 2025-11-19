@@ -20,11 +20,14 @@ export default function FormMocktest({ onSubmitHandler = () => {}, initialData, 
     const { category, id } = useParams();
     const isEditMode = Boolean(id);
 
-    const {
-        current: currentMocktest,
-        loading: sliceLoading,
-        error: sliceError,
-    } = useSelector((state) => state.mocktest);
+   const {
+    selectedMocktest: currentMocktest,
+    selectedStatus,
+    selectedError
+} = useSelector((state) => state.mocktest);
+
+const sliceLoading = selectedStatus === "loading";
+const sliceError = selectedError;
 
     const [form, setForm] = useState({
         // Use initialData for safe defaults
@@ -562,7 +565,7 @@ export default function FormMocktest({ onSubmitHandler = () => {}, initialData, 
                         <div className="grid grid-cols-2 gap-5">
                             <button
                                 onClick={() =>
-                                    navigate(`/admin/mocktests/${id}/questions/view`) 
+                                    navigate(`/admin/mocktests/${id}/questions`) 
                                 }
                                 className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/20 hover:border-cyan-400 p-6 rounded-xl cursor-pointer transition"
                             >
@@ -570,13 +573,7 @@ export default function FormMocktest({ onSubmitHandler = () => {}, initialData, 
                                 <span className="text-white font-medium">Review Generated Questions</span>
                             </button>
 
-                            <button
-                                onClick={() => toast.info("Bulk Upload to Global Pool Coming Soon!")}
-                                className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/20 hover:border-green-500 p-6 rounded-xl cursor-pointer transition"
-                            >
-                                <FaUpload size={30} className="text-green-500" />
-                                <span className="text-white font-medium">Bulk Upload to Pool</span>
-                            </button>
+                          
                         </div>
                     </motion.div>
                 )}

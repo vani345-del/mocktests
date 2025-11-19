@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import React from "react";
 import { ToastContainer } from "react-toastify";
 import ScrollToTop from "./components/ScrollToTop";
@@ -22,6 +21,7 @@ import CategoryPage from "./components/admin/CategoryPage";
 import CreateMocktestPage from "./components/admin/CreateMocktestPage";
 import FormMocktest from "./components/admin/FormMocktest";
 import AdminQuestions from "./components/admin/AdminQuestions";
+import SelectCategoryForCreation from "./components/admin/SelectCategoryForCreation";
 
 import WriteMocktest from "./pages/student/WriteMocktest";
 import InstructionsPage from "./pages/student/InstructionsPage";
@@ -31,8 +31,11 @@ import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
+import AddInstructor from './components/admin/AddInstructor'
 
 import { Toaster } from "react-hot-toast";
+import AddStudent from "./components/admin/AddStudent";
+import PaymentManagement from './components/admin/PaymentManagement'
 
 const MainLayout = ({ children }) => {
   const location = useLocation();
@@ -84,6 +87,7 @@ const App = () => {
             }
           />
 
+          {/* STUDENT ROUTES */}
           <Route
             path="/student/instructions/:mocktestId"
             element={userData ? <InstructionsPage /> : <Navigate to="/login" replace />}
@@ -104,7 +108,7 @@ const App = () => {
             element={userData ? <Checkout /> : <Navigate to="/login" replace />}
           />
 
-          {/* ---------------- STUDENT DASHBOARD ---------------- */}
+          {/* STUDENT DASHBOARD */}
           <Route
             path="/student-dashboard"
             element={
@@ -134,32 +138,34 @@ const App = () => {
             {/* ADMIN HOME */}
             <Route index element={<DashboardPage />} />
 
-            <Route path="instructors" element={<ManageInstructors />} />
-            <Route path="students" element={<ManageStudents />} />
+            {/* USERS SECTION (Nested properly) */}
+            <Route path="users">
+              {/* INSTRUCTORS */}
+              <Route path="instructors/manage" element={<ManageInstructors />} />
+              <Route path="instructors/add" element={<AddInstructor />} />
 
-            {/* -------- MOCKTESTS -------- */}
+              {/* STUDENTS */}
+              <Route path="students/manage" element={<ManageStudents />} />
+              <Route path="students/add" element={<AddStudent />} />
+            </Route>
+             <Route path="payments" element={<PaymentManagement/>}/>
+
+            {/* CATEGORIES */}
+            <Route path="categories" element={<CategoryPage />} />
+
+            {/* TESTS SECTION */}
+            <Route path="tests">
+              <Route path="manage-tests" element={<ManageMocktests />} />
+              <Route path="add-new-test" element={<SelectCategoryForCreation />} />
+            </Route>
+
+
+            {/* LEGACY MOCKTEST ROUTES */}
             <Route path="mocktests" element={<ManageMocktests />} />
-
-            {/* List page for category */}
             <Route path="mocktests/:category" element={<CategoryPage />} />
-
-            {/* Create new mocktest */}
-            <Route
-              path="mocktests/:category/new"
-              element={<CreateMocktestPage />}
-            />
-
-            {/* Edit mocktest */}
-            <Route
-              path="mocktests/:category/edit/:id"
-              element={<FormMocktest />}
-            />
-
-            {/* Manage questions */}
-            <Route
-              path="mocktests/:id/questions"
-              element={<AdminQuestions />}
-            />
+            <Route path="mocktests/:category/new" element={<CreateMocktestPage />} />
+            <Route path="mocktests/:category/edit/:id" element={<FormMocktest />} />
+            <Route path="mocktests/:id/questions" element={<AdminQuestions />} />
           </Route>
 
           {/* ---------------- FALLBACK ---------------- */}

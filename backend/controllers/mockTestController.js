@@ -10,6 +10,71 @@ import xlsx from "xlsx";
 
 
 
+export const getFilteredMocktests = async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    let filter = {};
+
+    // -------------------------------
+    // If no category → return ALL tests
+    // -------------------------------
+    if (!category || category.trim() === "") {
+      const allTests = await MockTest.find()
+        .populate("category", "name slug")
+        .sort({ createdAt: -1 });
+
+      return res.status(200).json(allTests);
+    }
+
+    let categoryFilterId = null;
+
+    // -------------------------------
+    // 1. If category is a valid ObjectId
+    // -------------------------------
+    if (mongoose.Types.ObjectId.isValid(category)) {
+      categoryFilterId = category;
+    } else {
+      // -------------------------------
+      // 2. Try slug or name
+      // -------------------------------
+      const foundCategory = await Category.findOne({
+        $or: [
+          { slug: category.toLowerCase() },
+          { name: new RegExp(`^${category}$`, "i") }
+        ],
+      });
+
+      if (foundCategory) {
+        categoryFilterId = foundCategory._id;
+      }
+    }
+
+    // -------------------------------
+    // Apply the category filter
+    // -------------------------------
+    if (categoryFilterId) {
+      filter.category = categoryFilterId;
+    } else {
+      // Fallback → category stored as text in mocktest.categorySlug
+      filter.categorySlug = category.toLowerCase();
+    }
+
+    // -------------------------------
+    // Fetch results
+    // -------------------------------
+    const mocktests = await MockTest.find(filter)
+      .populate("category", "name slug")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(mocktests);
+
+  } catch (error) {
+    console.error("❌ Filter API Error:", error);
+    res.status(500).json({ message: "Failed to fetch filtered mocktests" });
+  }
+};
+
 
 const generateQuestionsForTest = async (subjects) => {
     let questionIds = [];

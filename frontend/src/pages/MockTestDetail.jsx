@@ -31,44 +31,32 @@ export default function MockTestDetail() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // SAFE SELECTORS ------------------------------------------
-// DO NOT create fallback arrays inside useSelector
-const userData = useSelector((state) => state.user.userData);
-const cartItems = useSelector((state) => state.cart.items);
+  /* USER */
+  const userData = useSelector((state) => state.user.userData);
+  const cartItems = useSelector((state) => state.cart.cartItems || []);
 
-// SAFE computed value (outside selector)
-const isAlreadyInCart =
-  Array.isArray(cartItems) && cartItems.some((item) => item._id === id);
+  const isAlreadyInCart =
+    Array.isArray(cartItems) &&
+    cartItems.some((item) => item._id === id);
 
+  /* MOCKTEST */
+  const test = useSelector((state) => state.mocktest.selectedMocktest);
+  const status = useSelector((state) => state.mocktest.selectedStatus);
+  const error = useSelector((state) => state.mocktest.selectedError);
 
-  const {
-    currentTest: test,
-    currentTestStatus: status,
-    currentTestError: error,
-  } = useSelector((state) => state.mocktest);
-
-  // FETCH THE TEST ------------------------------------------
   useEffect(() => {
     if (id) dispatch(fetchPublicTestById(id));
   }, [dispatch, id]);
 
-  // ADD TO CART HANDLER --------------------------------------
   const handleAddToCart = () => {
     if (!userData) {
-      toast.error("Please log in to add items to your cart");
-      navigate("/login");
-      return;
+      toast.error("Please log in");
+      return navigate("/login");
     }
-
-    if (isAlreadyInCart) {
-      navigate("/cart");
-      return;
-    }
-
+    if (isAlreadyInCart) return navigate("/cart");
     dispatch(addItemToCart(id));
   };
 
-  // LOADING UI -----------------------------------------------
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-200px)]">
@@ -77,7 +65,6 @@ const isAlreadyInCart =
     );
   }
 
-  // ERROR UI -------------------------------------------------
   if (status === "failed") {
     return (
       <div className="max-w-4xl mx-auto pt-40 text-center">
@@ -88,7 +75,7 @@ const isAlreadyInCart =
           className="mt-6 inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           <FaArrowLeft className="mr-2" />
-          Back to All Tests
+          Back to Tests
         </Link>
       </div>
     );
@@ -98,34 +85,30 @@ const isAlreadyInCart =
 
   return (
     <div className="bg-slate-50 min-h-screen pt-28 pb-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4">
 
         {/* Breadcrumbs */}
-        <div className="mb-6 text-sm font-medium text-gray-500">
+        <div className="mb-6 text-sm text-gray-500">
           <Link to="/mocktests" className="hover:text-blue-600">
             All Tests
-          </Link>
-          <span className="mx-2">/</span>
+          </Link>{" "}
+          /{" "}
           <span className="text-gray-900">{test.title}</span>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-          {/* MAIN CONTENT */}
-          <div className="lg:col-span-2 bg-white p-6 sm:p-8 rounded-lg shadow-lg border border-gray-200">
+          {/* MAIN CARD */}
+          <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg border">
 
-            {/* HEADER */}
-            <div className="mb-6">
-              <span className="inline-block bg-blue-100 text-blue-700 text-sm font-semibold px-3 py-1 rounded-full mb-2">
-                {test.category?.name || "Test Series"}
-              </span>
-              <h1 className="text-4xl font-bold text-gray-900 leading-tight">
-                {test.title}
-              </h1>
-            </div>
+            <span className="inline-block bg-blue-100 text-blue-700 text-sm font-semibold px-3 py-1 rounded-full mb-4">
+              {test.category?.name}
+            </span>
+
+            <h1 className="text-4xl font-bold text-gray-900">{test.title}</h1>
 
             {/* IMAGE */}
-            <div className="w-full h-64 bg-slate-100 rounded-lg mb-8 flex items-center justify-center text-slate-400">
+            <div className="w-full h-64 bg-slate-100 rounded-lg mt-6 mb-8 grid place-items-center">
               {test.imageUrl ? (
                 <img
                   src={test.imageUrl}
@@ -133,118 +116,73 @@ const isAlreadyInCart =
                   className="w-full h-full object-cover rounded-lg"
                 />
               ) : (
-                <span>Test Cover Image</span>
+                "Test Cover Image"
               )}
             </div>
 
             {/* DETAILS */}
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
-              Test Structure
-            </h2>
-
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8 bg-slate-50 p-4 rounded-lg">
               <DetailItem
                 icon={<FaQuestionCircle />}
-                label="Total Questions"
-                value={`${test.totalQuestions} Questions`}
+                label="Questions"
+                value={`${test.totalQuestions}`}
               />
               <DetailItem
                 icon={<FaClock />}
                 label="Duration"
-                value={`${test.durationMinutes} Mins`}
+                value={`${test.durationMinutes} mins`}
               />
               <DetailItem
                 icon={<FaCheck />}
                 label="Total Marks"
-                value={`${test.totalMarks} Marks`}
+                value={`${test.totalMarks}`}
               />
               <DetailItem
                 icon={<FaMinusCircle />}
                 label="Negative Marking"
-                value={`${test.negativeMarking} Marks`}
+                value={`${test.negativeMarking}`}
               />
               <DetailItem
                 icon={<FaBook />}
                 label="Subjects"
-                value={test.subjects?.map((s) => s.name).join(", ") || "General"}
+                value={test.subjects?.map((s) => s.name).join(", ")}
               />
             </div>
 
-            {/* DESCRIPTION */}
-            <h2 className="text-2xl font-semibold text-gray-900 mb-4">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">
               Description
             </h2>
-            <div className="prose prose-lg text-gray-700 max-w-none">
-              <p>{test.description || "No description provided."}</p>
-            </div>
+            <p className="text-gray-700">{test.description}</p>
           </div>
 
           {/* RIGHT SIDE CARD */}
-          <aside className="lg:col-span-1">
-            <div className="sticky top-28 bg-white p-6 rounded-lg shadow-lg border border-gray-200">
-
-              {/* PRICE */}
-              <div className="mb-5 text-center">
-                {test.price > 0 ? (
-                  <>
-                    {test.discountPrice > 0 && (
-                      <span className="text-xl text-gray-400 line-through mr-2">
-                        ₹{test.price}
-                      </span>
-                    )}
-                    <span className="text-4xl font-bold text-gray-900">
-                      ₹{test.discountPrice > 0 ? test.discountPrice : test.price}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-4xl font-bold text-green-600">
-                    Free
+          <aside className="bg-white p-6 rounded-lg shadow-lg border sticky top-28">
+            <div className="text-center mb-6">
+              {test.discountPrice > 0 ? (
+                <>
+                  <span className="text-xl text-gray-400 line-through">
+                    ₹{test.price}
                   </span>
-                )}
-              </div>
-
-              {/* BUTTON */}
-              <button
-                onClick={handleAddToCart}
-                className={`w-full text-lg font-semibold py-3 px-6 rounded-lg shadow-md transition-all duration-300 transform hover:scale-105 ${
-                  isAlreadyInCart
-                    ? "bg-green-600 text-white hover:bg-green-700"
-                    : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
-              >
-                {test.price > 0
-                  ? isAlreadyInCart
-                    ? "Go to Cart"
-                    : "Add to Cart"
-                  : isAlreadyInCart
-                  ? "Go to Cart"
-                  : "Start Test"}
-              </button>
-
-              {/* FEATURES */}
-              <div className="mt-6">
-                <h4 className="text-md font-semibold text-gray-900 mb-3">
-                  This test includes:
-                </h4>
-                <ul className="space-y-2 text-gray-600">
-                  <li className="flex items-center">
-                    <FaCheck className="text-green-500 mr-2" /> Full-length Mock
-                    Test
-                  </li>
-                  <li className="flex items-center">
-                    <FaCheck className="text-green-500 mr-2" /> Latest Pattern
-                  </li>
-                  <li className="flex items-center">
-                    <FaCheck className="text-green-500 mr-2" /> Instant Score &
-                    Analysis
-                  </li>
-                  <li className="flex items-center">
-                    <FaCheck className="text-green-500 mr-2" /> Detailed
-                    Solutions
-                  </li>
-                </ul>
-              </div>
+                  <br />
+                  <span className="text-4xl font-bold text-gray-900">
+                    ₹{test.discountPrice}
+                  </span>
+                </>
+              ) : (
+                <span className="text-4xl font-bold text-green-600">Free</span>
+              )}
             </div>
+
+            <button
+              onClick={handleAddToCart}
+              className={`w-full py-3 text-lg rounded-lg font-semibold transition ${
+                isAlreadyInCart
+                  ? "bg-green-600 hover:bg-green-700"
+                  : "bg-blue-600 hover:bg-blue-700"
+              } text-white`}
+            >
+              {isAlreadyInCart ? "Go to Cart" : "Add to Cart"}
+            </button>
           </aside>
         </div>
       </div>

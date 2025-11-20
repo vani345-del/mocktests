@@ -124,3 +124,55 @@ export const verifyPayment = async (req, res) => {
     });
   }
 };
+
+// -------------------------------------------------------------
+// GET PAYMENT HISTORY (ADMIN)
+// -------------------------------------------------------------
+export const getPaymentHistory = async (req, res) => {
+  try {
+    // Fetch all orders, populating user details and purchased item details
+    const orders = await Order.find({})
+      .populate({
+        path: 'user',
+        select: 'name email', // Get student name and email
+      })
+      .populate({
+        path: 'items',
+        select: 'title', // Get mock test title(s)
+      })
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    // Format the data for the frontend table and KPI calculations
+    const formattedPayments = orders.map(order => {
+      // Concatenate all purchased mock test titles
+      const courseName = order.items.length > 0 
+        ? order.items.map(item => item.title).join(', ') 
+        : 'N/A';
+      
+      // Map "successful" to "success" to match frontend badge logic
+      const status = order.status === "successful" ? "success" : order.status; 
+      
+      return {
+        _id: order._id,
+        // Handle cases where a user might have been deleted but order still exists
+        studentName: order.user ? order.user.name : 'User Deleted', 
+        email: order.user ? order.user.email : 'N/A',
+        courseName: courseName,
+        amount: order.amount,
+        date: order.createdAt,
+        orderId: order.razorpay?.order_id || 'N/A',
+        paymentId: order.razorpay?.payment_id || 'N/A',
+        status: status,
+        method: 'Razorpay' // Assuming all payments are via Razorpay for simplicity
+      };
+    });
+
+    res.status(200).json(formattedPayments);
+  } catch (error) {
+    console.error("Error fetching payment history:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error during fetching payment history",
+    });
+  }
+};

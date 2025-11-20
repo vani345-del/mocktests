@@ -9,7 +9,7 @@ import {
   FaMoneyBillWave,
   FaCalendar,
   FaArrowTrendUp, 
-  FaHandshake,    
+  FaHandshake, 	
 } from "react-icons/fa6"; 
 
 // Helper function to format INR currency
@@ -25,7 +25,7 @@ const formatPrice = (price) =>
 const StatusBadge = ({ status }) => {
   const baseClass = "px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-colors duration-200";
   
-  switch (status.toLowerCase()) {
+  switch (status?.toLowerCase()) {
     case "success":
       return (
         <span className={`${baseClass} bg-green-100 text-green-700`}>
@@ -58,7 +58,7 @@ const PaymentManagement = () => {
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-  const [methodFilter, setMethodFilter] = useState("");
+  // Removed methodFilter state (not used in final table design)
   const [dateFilter, setDateFilter] = useState("");
 
   // KPI DATA
@@ -96,8 +96,8 @@ const PaymentManagement = () => {
         .reduce((sum, p) => sum + p.amount, 0);
         
       const aov = successPayments.length > 0 
-                  ? Math.round(totalRevenue / successPayments.length) 
-                  : 0;
+                ? Math.round(totalRevenue / successPayments.length) 
+                : 0;
 
       setStats({
         totalRevenue: totalRevenue,
@@ -139,8 +139,7 @@ const PaymentManagement = () => {
       const matchesStatus =
         statusFilter === "" || p.status === statusFilter;
 
-      const matchesMethod =
-        methodFilter === "" || p.method === methodFilter;
+      // Removed matchesMethod logic for cleaner component
 
       const matchesDate =
         dateFilter === "" ||
@@ -150,37 +149,35 @@ const PaymentManagement = () => {
         matchesSearch &&
         matchesCourse &&
         matchesStatus &&
-        matchesMethod &&
         matchesDate
       );
     });
-  }, [payments, search, courseFilter, statusFilter, methodFilter, dateFilter]);
+  }, [payments, search, courseFilter, statusFilter, dateFilter]);
 
 
   /* ---------------------- RENDER ---------------------- */
 
   // Custom Tailwind classes for better reusability
-  // NOTE: Changed default head class to fit new column alignment
   const tableHeadClassLeft = "px-6 py-3 text-left font-bold text-gray-600 tracking-wider border-b";
   const tableDataClass = "px-6 py-4 whitespace-nowrap text-gray-700";
   const inputClass = "w-full p-2.5 bg-gray-50 border border-gray-300 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-150 outline-none";
   
   const KpiCard = ({ title, value, icon: Icon, colorClass }) => {
-      const isColoredBg = colorClass.includes('bg-indigo') || colorClass.includes('bg-orange');
-      const textColor = isColoredBg ? 'text-white' : 'text-gray-900';
-      const iconColor = isColoredBg ? 'text-white' : 'text-gray-500';
-      
-      return (
-        <div className={`flex flex-col p-5 rounded-xl shadow-lg border-b-4 ${colorClass}`}>
-          <div className="flex justify-between items-center">
-            <p className="text-sm font-medium text-gray-600">{title}</p>
-            <Icon className={`w-5 h-5 ${iconColor}`} />
-          </div>
-          <h2 className={`text-2xl font-extrabold mt-3 ${textColor}`}>
-            {value}
-          </h2>
+    const isColoredBg = colorClass.includes('bg-indigo') || colorClass.includes('bg-orange');
+    const textColor = isColoredBg ? 'text-white' : 'text-gray-900';
+    const iconColor = isColoredBg ? 'text-white' : 'text-gray-500';
+    
+    return (
+      <div className={`flex flex-col p-5 rounded-xl shadow-lg border-b-4 ${colorClass}`}>
+        <div className="flex justify-between items-center">
+          <p className="text-sm font-medium text-gray-600">{title}</p>
+          <Icon className={`w-5 h-5 ${iconColor}`} />
         </div>
-      );
+        <h2 className={`text-2xl font-extrabold mt-3 ${textColor}`}>
+          {value}
+        </h2>
+      </div>
+    );
   };
 
   return (
@@ -246,10 +243,10 @@ const PaymentManagement = () => {
             </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           
           {/* Search */}
-          <div className="col-span-1 md:col-span-2">
+          <div className="col-span-1 md:col-span-1">
             <label className="block text-gray-700 text-sm font-medium mb-1">Search (Name, Email, Order ID)</label>
             <div className="flex items-center bg-gray-50 rounded-lg border focus-within:border-blue-500 transition duration-150">
               <FaMagnifyingGlass className="text-gray-400 w-4 h-4 ml-3" /> 
@@ -263,7 +260,7 @@ const PaymentManagement = () => {
             </div>
           </div>
 
-          {/* Course */}
+          {/* Test Name Filter */}
           <div>
             <label className="block text-gray-700 text-sm font-medium mb-1">Test Name</label>
             <select
@@ -338,10 +335,9 @@ const PaymentManagement = () => {
                 {/* 5. Purchased Date */}
                 <th className={tableHeadClassLeft}>Purchased Date</th> 
                 
-                {/* 6. Status */}
-               
+                {/* 6. Status - ADDED MISSING HEADER */}
+                <th className={tableHeadClassLeft}>Status</th>
 
-                {/* NOTE: Removed Order ID and Method for simplicity, as requested, but keeping Status */}
               </tr>
             </thead>
 
@@ -383,8 +379,10 @@ const PaymentManagement = () => {
                       {new Date(p.date).toLocaleDateString()}
                     </td>
                     
-                    {/* Status */}
-                   
+                    {/* Status - ADDED MISSING BODY CONTENT */}
+                    <td className={tableDataClass}>
+                      <StatusBadge status={p.status} />
+                    </td>
 
                   </tr>
                 ))

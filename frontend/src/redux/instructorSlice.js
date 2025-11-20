@@ -2,14 +2,19 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../api/axios";
 import toast from "react-hot-toast";
 
-// --- Async Thunks ---
+//
+// -------------------------------------
+// ASYNC THUNKS
+// -------------------------------------
+//
 
+// ⬇ Fetch all instructors
 export const fetchInstructors = createAsyncThunk(
   "instructors/fetchInstructors",
   async (_, { rejectWithValue }) => {
     try {
-      const { data } = await api.get("/api/admin/instructors");
-      return data;
+      const { data } = await api.get("/api/admin/users/instructors");
+      return data;                               // array of instructors
     } catch (err) {
       const message = err.response?.data?.message || err.message;
       toast.error(message);
@@ -18,13 +23,17 @@ export const fetchInstructors = createAsyncThunk(
   }
 );
 
+// ⬇ Add new instructor
 export const addInstructor = createAsyncThunk(
   "instructors/addInstructor",
   async (instructorData, { rejectWithValue }) => {
     try {
-      const { data } = await api.post("/api/admin/instructors", instructorData);
+      const { data } = await api.post(
+        "/api/admin/users/instructors",
+        instructorData
+      );
       toast.success(data.message);
-      return data.instructor; // Return the new instructor object
+      return data.instructor;                     // new instructor object
     } catch (err) {
       const message = err.response?.data?.message || err.message;
       toast.error(message);
@@ -33,32 +42,34 @@ export const addInstructor = createAsyncThunk(
   }
 );
 
+// ⬇ Toggle active/inactive status
 export const toggleInstructorStatus = createAsyncThunk(
   "instructors/toggleInstructorStatus",
   async (instructorId, { rejectWithValue }) => {
     try {
-      // This matches the new backend route
       const { data } = await api.put(
-        `/api/admin/instructors/${instructorId}/toggle-status`
+        `/api/admin/users/instructors/${instructorId}/toggle-status`
       );
+
       toast.success(data.message);
-      return data.instructor; // Return the updated instructor object
+      return data.instructor;                     // updated instructor
     } catch (err) {
       const message = err.response?.data?.message || err.message;
       toast.error(message);
       return rejectWithValue(message);
     }
-    
   }
-
-  
 );
 
-// --- Slice ---
+//
+// -------------------------------------
+// SLICE
+// -------------------------------------
+//
 
 const initialState = {
   instructors: [],
-  status: "idle", // 'idle' | 'loading' | 'succeeded' | 'failed'
+  status: "idle",
   error: null,
 };
 
@@ -68,47 +79,35 @@ const instructorSlice = createSlice({
   reducers: {},
   extraReducers: (builder) => {
     builder
-      // Fetch Instructors
+
+      // FETCH
       .addCase(fetchInstructors.pending, (state) => {
         state.status = "loading";
-        state.error = null;
       })
       .addCase(fetchInstructors.fulfilled, (state, action) => {
         state.status = "succeeded";
-        state.instructors = action.payload;
+        state.instructors = action.payload;       // array
       })
       .addCase(fetchInstructors.rejected, (state, action) => {
         state.status = "failed";
         state.error = action.payload;
       })
 
-      // Add Instructor
-      .addCase(addInstructor.pending, (state) => {
-        // You could set a specific 'adding' status if needed
-        // For now, we'll just let the modal handle its own loading state
-      })
+      // ADD
       .addCase(addInstructor.fulfilled, (state, action) => {
-        // Add the new instructor to the beginning of the list
         state.instructors.unshift(action.payload);
       })
-      .addCase(addInstructor.rejected, (state, action) => {
-        // Error is already handled by toast in the thunk
-        // You could log action.payload here if needed
-      })
+
+      // TOGGLE STATUS
       .addCase(toggleInstructorStatus.fulfilled, (state, action) => {
-        const updatedInstructor = action.payload;
-        // Find the instructor in the state and update them
+        const updated = action.payload;
         const index = state.instructors.findIndex(
-          (inst) => inst._id === updatedInstructor._id
+          (inst) => inst._id === updated._id
         );
         if (index !== -1) {
-          state.instructors[index] = updatedInstructor;
+          state.instructors[index] = updated;
         }
-      })
-      .addCase(toggleInstructorStatus.rejected, (state, action) => {
-        // Error is already handled by toast in the thunk
-      })
-      
+      });
   },
 });
 

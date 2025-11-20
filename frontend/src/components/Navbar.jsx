@@ -1,8 +1,8 @@
+// src/components/Navbar.jsx
 import React, { useState, useEffect } from "react";
+import { Menu, X, User, ShoppingCart, LogOut, LogIn, BookOpen, Layers, TrendingUp } from "lucide-react";
 import { IoMdPerson } from "react-icons/io";
-import { GiHamburgerMenu, GiSplitCross } from "react-icons/gi";
 import { Link, useNavigate } from "react-router-dom";
-import { FaShoppingCart } from "react-icons/fa";
 import axios from "axios";
 import { toast } from "react-toastify";
 import { useDispatch, useSelector } from "react-redux";
@@ -18,16 +18,12 @@ function Navbar() {
   const dispatch = useDispatch();
 
   const { userData } = useSelector((state) => state.user);
-
-  // 🔥 FIXED — correct field from cartSlice
   const cartItems = useSelector((state) => state.cart.cartItems || []);
 
   const serverUrl = import.meta.env.VITE_SERVER_URL;
 
   useEffect(() => {
-    if (userData) {
-      dispatch(fetchCart());
-    }
+    if (userData) dispatch(fetchCart());
   }, [userData, dispatch]);
 
   const handleLogout = async () => {
@@ -47,114 +43,115 @@ function Navbar() {
   return (
     <>
       {/* TOP NAVBAR */}
-      <header className="bg-white/90 backdrop-blur-sm shadow-sm fixed top-0 left-0 w-full z-50">
+      <header className="fixed top-0 left-0 w-full z-50 bg-gray-950/90 backdrop-blur-lg border-b border-gray-800 shadow-xl">
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
 
             {/* LOGO */}
             <div
-              className="flex-shrink-0 text-2xl font-bold text-blue-600 cursor-pointer"
               onClick={() => navigate("/")}
+              className="text-2xl font-black cursor-pointer tracking-tight flex items-center space-x-1"
             >
-              TestPrep
+              <span className="text-cyan-400">EXAM</span>
+              <span className="text-gray-100">PRO</span>
             </div>
 
             {/* DESKTOP MENU */}
             <div className="hidden md:flex items-center space-x-8">
-              <a href="#categories" className="font-medium text-gray-600 hover:text-blue-600">Categories</a>
-              <a href="/mocktests" className="font-medium text-gray-600 hover:text-blue-600">Mock Tests</a>
-              <a href="#grand-tests" className="font-medium text-gray-600 hover:text-blue-600">Grand Tests</a>
-              <a href="#testimonials" className="font-medium text-gray-600 hover:text-blue-600">Testimonials</a>
+              <a href="#categories" className="text-gray-300 hover:text-cyan-400 transition">Categories</a>
+              <Link to="/mocktests" className="text-gray-300 hover:text-cyan-400 transition">Mock Tests</Link>
+              <a href="#grand-tests" className="text-gray-300 hover:text-cyan-400 transition">Grand Tests</a>
+              <a href="#testimonials" className="text-gray-300 hover:text-cyan-400 transition">Testimonials</a>
             </div>
 
-            {/* RIGHT SIDE */}
+            {/* DESKTOP RIGHT SIDE */}
             <div className="hidden md:flex items-center space-x-4 relative">
 
-              {/* CART ICON (only when logged in) */}
+              {/* CART */}
               {userData && (
-                <Link to="/cart" className="relative text-gray-600 hover:text-blue-600 p-2">
-                  <FaShoppingCart className="w-6 h-6" />
-
-                  {/* FIXED SAFE LENGTH CHECK */}
-                  {cartItems?.length > 0 && (
-                    <span className="absolute top-0 right-0 flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-red-500 rounded-full">
-                      {cartItems?.length || 0}
+                <Link to="/cart" className="relative text-gray-300 hover:text-cyan-400 p-2">
+                  <ShoppingCart className="w-6 h-6" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-5 h-5 text-xs font-bold flex items-center justify-center bg-red-600 text-white rounded-full ring-2 ring-gray-900">
+                      {cartItems.length}
                     </span>
                   )}
                 </Link>
               )}
 
-              {/* PROFILE */}
-              {!userData ? (
-                <IoMdPerson
-                  className="w-[45px] h-[45px] p-2 bg-black text-white rounded-full cursor-pointer border-2 border-white"
-                  onClick={() => setShowPro((prev) => !prev)}
-                />
-              ) : (
-                <div
-                  className="w-[45px] h-[45px] rounded-full text-white flex items-center justify-center text-[18px] border-2 bg-black border-white cursor-pointer"
-                  onClick={() => setShowPro((prev) => !prev)}
-                >
-                  {userData.photoUrl ? (
-                    <img
-                      src={userData.photoUrl}
-                      alt="profile"
-                      className="w-full h-full object-cover rounded-full"
-                    />
-                  ) : (
-                    userData?.name?.slice(0, 1).toUpperCase()
-                  )}
-                </div>
-              )}
-
-              {/* LOGIN / LOGOUT BUTTON */}
+              {/* PROFILE ICON */}
               {!userData ? (
                 <button
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-full hover:bg-blue-700"
                   onClick={() => navigate("/login")}
+                  className="px-4 py-2 text-sm font-bold text-gray-900 bg-cyan-400 hover:bg-cyan-300 rounded-full shadow transition"
                 >
                   Login
                 </button>
               ) : (
-                <button
-                  onClick={handleLogout}
-                  disabled={loading}
-                  className="px-4 py-2 text-sm font-medium bg-white text-blue-600 border border-blue-600 rounded-full hover:bg-blue-50"
-                >
-                  Logout
-                </button>
-              )}
-
-              {/* PROFILE DROPDOWN */}
-              {showPro && userData && (
-                <div className="absolute top-14 right-0 w-40 bg-white border border-gray-200 rounded-lg shadow-md p-2 flex flex-col">
-                  <span
-                    className="px-3 py-2 text-gray-800 hover:bg-blue-50 rounded cursor-pointer"
-                    onClick={() => {
-                      navigate("/profile");
-                      setShowPro(false);
-                    }}
+                <>
+                  {/* Avatar */}
+                  <div
+                    onClick={() => setShowPro(!showPro)}
+                    className="w-[42px] h-[42px] rounded-full overflow-hidden border border-gray-700 cursor-pointer hover:border-cyan-400 transition"
                   >
-                    My Profile
-                  </span>
+                    {userData.photoUrl ? (
+                      <img src={userData.photoUrl} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-800 text-white font-bold">
+                        {userData?.name?.slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
 
-                  <span
-                    className="px-3 py-2 text-gray-800 hover:bg-blue-50 rounded cursor-pointer"
-                    onClick={() => {
-                      navigate("/mycourses");
-                      setShowPro(false);
-                    }}
+                  {/* Logout */}
+                  <button
+                    onClick={handleLogout}
+                    disabled={loading}
+                    className="px-4 py-2 text-sm font-medium text-cyan-400 border border-cyan-600 bg-gray-900 rounded-full hover:bg-gray-800"
                   >
-                    My Courses
-                  </span>
-                </div>
+                    {loading ? "..." : "Logout"}
+                  </button>
+
+                  {/* DROPDOWN */}
+                  {showPro && (
+                    <div className="absolute top-14 right-0 w-40 bg-gray-900 border border-gray-700 rounded-lg shadow-xl p-2">
+                      <Link
+                        to="/profile"
+                        onClick={() => setShowPro(false)}
+                        className="block px-3 py-2 hover:bg-gray-800 rounded text-gray-200"
+                      >
+                        My Profile
+                      </Link>
+                      <Link
+                        to="/mycourses"
+                        onClick={() => setShowPro(false)}
+                        className="block px-3 py-2 hover:bg-gray-800 rounded text-gray-200"
+                      >
+                        My Courses
+                      </Link>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
             {/* MOBILE MENU BUTTON */}
-            <div className="md:hidden flex items-center">
-              <GiHamburgerMenu
-                className="w-7 h-7 text-gray-800 cursor-pointer"
+            <div className="md:hidden flex items-center space-x-4">
+
+              {/* CART ICON MOBILE */}
+              {userData && (
+                <Link to="/cart" className="relative text-gray-300 hover:text-cyan-400">
+                  <ShoppingCart className="w-6 h-6" />
+                  {cartItems.length > 0 && (
+                    <span className="absolute -top-1 -right-1 w-4 h-4 text-xs font-bold flex items-center justify-center bg-red-600 text-white rounded-full">
+                      {cartItems.length}
+                    </span>
+                  )}
+                </Link>
+              )}
+
+              <Menu
+                className="w-7 h-7 text-cyan-400 cursor-pointer"
                 onClick={() => setShowHam(true)}
               />
             </div>
@@ -164,86 +161,104 @@ function Navbar() {
 
       {/* MOBILE MENU */}
       <div
-        className={`fixed top-0 left-0 w-full h-full bg-black/80 backdrop-blur-sm z-40 flex flex-col items-center justify-center transition-transform duration-500 ${
-          showHam ? "translate-x-0" : "-translate-x-full"
+        className={`fixed top-0 right-0 w-full h-full bg-gray-950/95 backdrop-blur-lg z-50 flex flex-col items-center justify-center transition-all duration-500 ${
+          showHam ? "translate-x-0" : "translate-x-full"
         }`}
       >
-        <GiSplitCross
-          className="absolute top-6 right-6 text-white w-8 h-8 cursor-pointer"
+        <X
+          className="absolute top-6 right-6 w-8 h-8 text-cyan-400 cursor-pointer"
           onClick={() => setShowHam(false)}
         />
 
-        {/* PROFILE CIRCLE */}
-        {!userData ? (
-          <IoMdPerson className="w-[60px] h-[60px] p-2 bg-black text-white rounded-full border-2 border-white mb-6" />
-        ) : (
-          <div
-            className="w-[60px] h-[60px] rounded-full text-white flex items-center justify-center text-[20px] border-2 bg-black border-white cursor-pointer mb-6"
-            onClick={() => {
-              navigate("/profile");
-              setShowHam(false);
-            }}
-          >
-            {userData.photoUrl ? (
-              <img
-                src={userData.photoUrl}
-                alt="profile"
-                className="w-full h-full object-cover rounded-full"
-              />
-            ) : (
-              userData?.name?.slice(0, 1).toUpperCase()
-            )}
-          </div>
-        )}
+        {/* PROFILE MOBILE */}
+        <div className="text-center mb-10">
+          {userData ? (
+            <div
+              className="w-[70px] h-[70px] rounded-full border border-cyan-400 overflow-hidden mx-auto mb-4"
+              onClick={() => {
+                navigate("/profile");
+                setShowHam(false);
+              }}
+            >
+              <img src={userData.photoUrl} className="w-full h-full object-cover" />
+            </div>
+          ) : (
+            <User className="w-[70px] h-[70px] p-2 text-gray-300 border border-gray-700 rounded-full mx-auto mb-4" />
+          )}
+
+          <p className="text-lg text-white">
+            {userData ? `Welcome, ${userData.name}` : "Guest Mode"}
+          </p>
+        </div>
 
         {/* MOBILE LINKS */}
-        <a
-          href="#categories"
-          className="text-white text-lg mb-3 hover:text-blue-400"
-          onClick={() => setShowHam(false)}
-        >
-          Categories
-        </a>
-        <a
-          href="/mocktests"
-          className="text-white text-lg mb-3 hover:text-blue-400"
-          onClick={() => setShowHam(false)}
-        >
-          Mock Tests
-        </a>
-        <a
-          href="#grand-tests"
-          className="text-white text-lg mb-3 hover:text-blue-400"
-          onClick={() => setShowHam(false)}
-        >
-          Grand Tests
-        </a>
-        <a
-          href="#testimonials"
-          className="text-white text-lg mb-6 hover:text-blue-400"
-          onClick={() => setShowHam(false)}
-        >
-          Testimonials
-        </a>
+        <div className="flex flex-col gap-6 text-xl font-medium mb-12">
+          <a
+            href="#categories"
+            onClick={() => setShowHam(false)}
+            className="flex items-center space-x-3 text-white hover:text-cyan-400"
+          >
+            <Layers className="w-5 h-5" />
+            <span>Categories</span>
+          </a>
 
-        {/* LOGIN / LOGOUT BUTTONS */}
+          <Link
+            to="/mocktests"
+            onClick={() => setShowHam(false)}
+            className="flex items-center space-x-3 text-white hover:text-cyan-400"
+          >
+            <BookOpen className="w-5 h-5" />
+            <span>Mock Tests</span>
+          </Link>
+
+          <a
+            href="#grand-tests"
+            onClick={() => setShowHam(false)}
+            className="flex items-center space-x-3 text-white hover:text-cyan-400"
+          >
+            <TrendingUp className="w-5 h-5" />
+            <span>Grand Tests</span>
+          </a>
+
+          <a
+            href="#testimonials"
+            onClick={() => setShowHam(false)}
+            className="flex items-center space-x-3 text-white hover:text-cyan-400"
+          >
+            <User className="w-5 h-5" />
+            <span>Testimonials</span>
+          </a>
+
+          {userData && (
+            <Link
+              to="/mycourses"
+              onClick={() => setShowHam(false)}
+              className="flex items-center space-x-3 text-white hover:text-cyan-400"
+            >
+              <BookOpen className="w-5 h-5" />
+              <span>My Courses</span>
+            </Link>
+          )}
+        </div>
+
+        {/* LOGIN / LOGOUT BUTTONS MOBILE */}
         {!userData ? (
           <button
-            className="px-8 py-3 text-white bg-blue-600 rounded-full hover:bg-blue-700"
+            className="w-64 px-8 py-3 text-lg font-bold text-gray-900 bg-cyan-400 rounded-full hover:bg-cyan-300"
             onClick={() => {
               navigate("/login");
               setShowHam(false);
             }}
           >
-            Login
+            Login / Sign Up
           </button>
         ) : (
           <button
-            className="px-8 py-3 text-black bg-white rounded-full hover:bg-gray-200"
             onClick={() => {
               handleLogout();
               setShowHam(false);
             }}
+            className="w-64 px-8 py-3 text-lg font-bold border-2 border-cyan-600 text-white bg-gray-900 rounded-full hover:bg-gray-800"
           >
             Logout
           </button>

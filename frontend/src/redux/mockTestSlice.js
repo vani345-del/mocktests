@@ -1,274 +1,268 @@
-// frontend/src/redux/mockTestSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../api/axios";
 
 /* ============================================================
-   0️⃣ CREATE MOCKTEST (ADMIN)
-============================================================= */
-export const createMockTest = createAsyncThunk(
-  "mocktests/create",
-  async (payload, { rejectWithValue }) => {
-    try {
-      const res = await api.post("/api/admin/mocktests", payload);
-      return res.data.mocktest;
-    } catch (err) {
-      return rejectWithValue(
-        err.response?.data?.message || "Failed to create mocktest"
-      );
-    }
-  }
-);
-
-/* ============================================================
-   1️⃣ FETCH MOCKTEST LIST (ADMIN)
+   1️⃣ PUBLIC — FETCH ALL MOCKTESTS
 ============================================================= */
 export const fetchPublicMockTests = createAsyncThunk(
-  "mocktests/fetchPublic",
-  async (_, { getState, rejectWithValue }) => {
-    try {
-      const category = getState().mocktest.filters.category; // This is the slug string (e.g., 'ssc' or '')
-
-      let url = "/api/admin/mocktests/filter";
-      
-      // Only append the category filter if the value is not an empty string
-      if (category) {
-          // Use encodeURIComponent for safety, although category slugs are usually safe
-          url += `?category=${encodeURIComponent(category)}`;
-      }
-
-      const res = await api.get(url);
-      return res.data;
-    } catch (err) {
-      return rejectWithValue("Failed to load mock tests");
-    }
-  }
+  "mocktests/fetchPublic",
+  async (query = "", { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/api/public/mocktests${query}`);
+      return res.data;  // BACKEND RETURNS ARRAY
+    } catch (err) {
+      return rejectWithValue("Failed to load public mock tests");
+    }
+  }
 );
 
 /* ============================================================
-   2️⃣ FETCH PUBLIC TEST (STUDENT)
-============================================================= */
+   2️⃣ PUBLIC — FETCH TEST BY ID
+============================================================== */
 export const fetchPublicTestById = createAsyncThunk(
-  "mocktests/fetchPublicById",
-  async (id, { rejectWithValue }) => {
-    try {
-      const res = await api.get(`/api/mocktests/${id}`);
-      return res.data;
-    } catch (err) {
-      return rejectWithValue("Failed to load mocktest");
-    }
-  }
+  "mocktests/fetchPublicById",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/api/public/mocktests/${id}`);
+      return res.data;  // BACKEND RETURNS OBJECT
+    } catch (err) {
+      return rejectWithValue("Failed to load mocktest");
+    }
+  }
+);
+/* ============================================================
+   3️⃣ ADMIN — FETCH ALL MOCKTESTS
+============================================================= */
+export const fetchAdminMockTests = createAsyncThunk(
+  "mocktests/fetchAdmin",
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const category = getState().mocktest.filters.category;
+      let url = "/api/admin/mocktests/filter";
+
+      if (category) url += `?category=${encodeURIComponent(category)}`;
+
+      const res = await api.get(url);
+      return res.data.mocktests || res.data;
+    } catch (err) {
+      return rejectWithValue("Failed to load mock tests");
+    }
+  }
 );
 
 /* ============================================================
-   3️⃣ FETCH MOCKTEST FOR EDIT (ADMIN)
+   4️⃣ ADMIN — CREATE MOCKTEST
+============================================================= */
+export const createMockTest = createAsyncThunk(
+  "mocktests/create",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const res = await api.post("/api/admin/mocktests", payload);
+      return res.data.mocktest;
+    } catch (err) {
+      return rejectWithValue("Failed to create mocktest");
+    }
+  }
+);
+
+/* ============================================================
+   5️⃣ ADMIN — FETCH MOCKTEST FOR EDIT
 ============================================================= */
 export const fetchMockTestByIdForEdit = createAsyncThunk(
-  "mocktests/fetchByIdForEdit",
-  async (id, { rejectWithValue }) => {
-    try {
-      const res = await api.get(`/api/admin/mocktests/${id}`);
-      return res.data;
-    } catch (err) {
-      return rejectWithValue("Failed to load mocktest for editing");
-    }
-  }
+  "mocktests/fetchByIdForEdit",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/api/admin/mocktests/${id}`);
+      return res.data.mocktest || res.data;
+    } catch (err) {
+      return rejectWithValue("Failed to load mocktest for editing");
+    }
+  }
 );
 
 /* ============================================================
-   4️⃣ UPDATE MOCKTEST (ADMIN)
+   6️⃣ ADMIN — UPDATE MOCKTEST
 ============================================================= */
 export const updateMockTest = createAsyncThunk(
-  "mocktests/update",
-  async ({ id, ...payload }, { rejectWithValue }) => {
-    try {
-      const res = await api.put(`/api/admin/mocktests/${id}`, payload);
-      return res.data.mocktest;
-    } catch (err) {
-      return rejectWithValue("Failed to update mocktest");
-    }
-  }
+  "mocktests/update",
+  async ({ id, ...payload }, { rejectWithValue }) => {
+    try {
+      const res = await api.put(`/api/admin/mocktests/${id}`, payload);
+      return res.data.mocktest;
+    } catch (err) {
+      return rejectWithValue("Failed to update mocktest");
+    }
+  }
 );
 
 /* ============================================================
-   5️⃣ DELETE MOCKTEST
+   7️⃣ ADMIN — DELETE MOCKTEST
 ============================================================= */
 export const deleteMockTest = createAsyncThunk(
-  "mocktests/delete",
-  async (id, { rejectWithValue }) => {
-    try {
-      await api.delete(`/api/admin/mocktests/${id}`);
-      return id;
-    } catch (err) {
-      return rejectWithValue("Failed to delete mocktest");
-    }
-  }
+  "mocktests/delete",
+  async (id, { rejectWithValue }) => {
+    try {
+      await api.delete(`/api/admin/mocktests/${id}`);
+      return id;
+    } catch (err) {
+      return rejectWithValue("Failed to delete mocktest");
+    }
+  }
 );
 
 /* ============================================================
-   6️⃣ PUBLISH / UNPUBLISH
+   8️⃣ ADMIN — TOGGLE PUBLISH
 ============================================================= */
 export const togglePublish = createAsyncThunk(
-  "mocktests/togglePublish",
-  async (id, { rejectWithValue }) => {
-    try {
-      const res = await api.put(`/api/admin/mocktests/${id}/publish`);
-      return res.data.mocktest;
-    } catch (err) {
-      return rejectWithValue("Failed to toggle publish");
-    }
-  }
+  "mocktests/togglePublish",
+  async (id, { rejectWithValue }) => {
+    try {
+      const res = await api.put(`/api/admin/mocktests/${id}/publish`);
+      return res.data.mocktest;
+    } catch (err) {
+      return rejectWithValue("Failed to toggle publish");
+    }
+  }
 );
 
 /* ============================================================
-   7️⃣ GRAND TEST LEADERBOARD
+   9️⃣ PUBLIC — GRAND TEST LEADERBOARD
 ============================================================= */
 export const fetchGrandTestLeaderboard = createAsyncThunk(
-  "mocktests/leaderboard",
-  async (mockTestId, { rejectWithValue }) => {
-    try {
-      // NOTE: Assuming this route is correct for students/public view
-      const res = await api.get(`/api/mocktests/${mockTestId}/leaderboard`);
-      return { mockTestId, leaderboard: res.data };
-    } catch (err) {
-      return rejectWithValue(
-        err.response?.data?.message || "Leaderboard not available"
-      );
-    }
-  }
+  "mocktests/leaderboard",
+  async (mockTestId, { rejectWithValue }) => {
+    try {
+      const res = await api.get(`/api/mocktests/${mockTestId}/leaderboard`);
+      return { mockTestId, leaderboard: res.data };
+    } catch (err) {
+      return rejectWithValue("Leaderboard not available");
+    }
+  }
 );
 
 /* ============================================================
-   SLICE
+   SLICE
 ============================================================= */
 const mockTestSlice = createSlice({
-  name: "mocktest",
+  name: "mocktest",
+  initialState: {
+    /* PUBLIC */
+    publicMocktests: [],
+    publicStatus: "idle",
+    publicError: null,
 
-  initialState: {
-    publicMocktests: [],
-    publicStatus: "idle",
-    publicError: null,
+    /* PUBLIC — SINGLE */
+    selectedMocktest: null,
+    selectedStatus: "idle",
+    selectedError: null,
 
-    selectedMocktest: null,
-    selectedStatus: "idle",
-    selectedError: null,
+    /* ADMIN */
+    adminMocktests: [],
+    adminStatus: "idle",
+    adminError: null,
 
-    leaderboards: {},
-    leaderboardStatus: "idle",
-    leaderboardError: null,
+    /* LEADERBOARD */
+    leaderboards: {},
+    leaderboardStatus: "idle",
+    leaderboardError: null,
 
-    filters: {
-      category: "", // Stores the category slug string
-    },
-  },
+    filters: { category: "" },
+  },
 
-  reducers: {
-    setCategoryFilter(state, action) {
-      state.filters.category = action.payload;
-    },
-  },
+  reducers: {
+    setCategoryFilter(state, action) {
+      state.filters.category = action.payload;
+    },
+  },
 
-  extraReducers: (builder) => {
-    /* ----------------------------------
-       CREATE
-    ---------------------------------- */
-    builder.addCase(createMockTest.fulfilled, (state, action) => {
-      state.publicMocktests.push(action.payload);
-    });
+  extraReducers: (builder) => {
+    /* PUBLIC LIST */
+    builder
+      .addCase(fetchPublicMockTests.pending, (state) => {
+        state.publicStatus = "loading";
+      })
+      .addCase(fetchPublicMockTests.fulfilled, (state, action) => {
+        state.publicStatus = "succeeded";
+        state.publicMocktests = action.payload;
+      })
+      .addCase(fetchPublicMockTests.rejected, (state, action) => {
+        state.publicStatus = "failed";
+        state.publicError = action.payload;
+      });
 
-    /* ----------------------------------
-       FETCH LIST
-    ---------------------------------- */
-    builder
-      .addCase(fetchPublicMockTests.pending, (state) => {
-        state.publicStatus = "loading";
-      })
-      .addCase(fetchPublicMockTests.fulfilled, (state, action) => {
-        state.publicStatus = "succeeded";
-        // Assuming action.payload is the array of mock tests
-        state.publicMocktests = action.payload.mocktests || action.payload; 
-      })
-      .addCase(fetchPublicMockTests.rejected, (state, action) => {
-        state.publicStatus = "failed";
-        state.publicError = action.payload;
-      });
+    /* PUBLIC SINGLE TEST */
+    builder
+      .addCase(fetchPublicTestById.pending, (state) => {
+        state.selectedStatus = "loading";
+      })
+      .addCase(fetchPublicTestById.fulfilled, (state, action) => {
+        state.selectedStatus = "succeeded";
+        state.selectedMocktest = action.payload;
+      })
+      .addCase(fetchPublicTestById.rejected, (state, action) => {
+        state.selectedStatus = "failed";
+        state.selectedError = action.payload;
+      });
 
-    /* ----------------------------------
-       FETCH PUBLIC TEST BY ID
-    ---------------------------------- */
-    builder
-      .addCase(fetchPublicTestById.pending, (state) => {
-        state.selectedStatus = "loading";
-        state.selectedMocktest = null;
-      })
-      .addCase(fetchPublicTestById.fulfilled, (state, action) => {
-        state.selectedStatus = "succeeded";
-        state.selectedMocktest = action.payload;
-      })
-      .addCase(fetchPublicTestById.rejected, (state, action) => {
-        state.selectedStatus = "failed";
-        state.selectedError = action.payload;
-      });
+    /* ADMIN LIST */
+    builder
+      .addCase(fetchAdminMockTests.pending, (state) => {
+        state.adminStatus = "loading";
+      })
+      .addCase(fetchAdminMockTests.fulfilled, (state, action) => {
+        state.adminStatus = "succeeded";
+        state.adminMocktests = action.payload;
+      })
+      .addCase(fetchAdminMockTests.rejected, (state, action) => {
+        state.adminStatus = "failed";
+        state.adminError = action.payload;
+      });
 
-    /* ----------------------------------
-       FETCH TEST FOR EDIT
-    ---------------------------------- */
-    builder
-      .addCase(fetchMockTestByIdForEdit.pending, (state) => {
-        state.selectedStatus = "loading";
-      })
-      .addCase(fetchMockTestByIdForEdit.fulfilled, (state, action) => {
-        state.selectedStatus = "succeeded";
-        state.selectedMocktest = action.payload;
-      })
-      .addCase(fetchMockTestByIdForEdit.rejected, (state, action) => {
-        state.selectedStatus = "failed";
-        state.selectedError = action.payload;
-      });
+    /* CREATE */
+    builder.addCase(createMockTest.fulfilled, (state, action) => {
+      state.adminMocktests.push(action.payload);
+    });
 
-    /* ----------------------------------
-       UPDATE
-    ---------------------------------- */
-    builder.addCase(updateMockTest.fulfilled, (state, action) => {
-      const updated = action.payload;
-      const index = state.publicMocktests.findIndex((t) => t._id === updated._id);
-      if (index !== -1) state.publicMocktests[index] = updated;
-    });
+    /* UPDATE */
+    builder.addCase(updateMockTest.fulfilled, (state, action) => {
+      const updated = action.payload;
+      const index = state.adminMocktests.findIndex(
+        (t) => t._id === updated._id
+      );
+      if (index !== -1) state.adminMocktests[index] = updated;
+    });
 
-    /* ----------------------------------
-       DELETE
-    ---------------------------------- */
-    builder.addCase(deleteMockTest.fulfilled, (state, action) => {
-      state.publicMocktests = state.publicMocktests.filter(
-        (t) => t._id !== action.payload
-      );
-    });
+    /* DELETE */
+    builder.addCase(deleteMockTest.fulfilled, (state, action) => {
+      state.adminMocktests = state.adminMocktests.filter(
+        (t) => t._id !== action.payload
+      );
+    });
 
-    /* ----------------------------------
-       TOGGLE PUBLISH
-    ---------------------------------- */
-    builder.addCase(togglePublish.fulfilled, (state, action) => {
-      const updated = action.payload;
-      const index = state.publicMocktests.findIndex((t) => t._id === updated._id);
-      if (index !== -1) state.publicMocktests[index] = updated;
-    });
+    /* PUBLISH */
+    builder.addCase(togglePublish.fulfilled, (state, action) => {
+      const updated = action.payload;
+      const index = state.adminMocktests.findIndex(
+        (t) => t._id === updated._id
+      );
+      if (index !== -1) state.adminMocktests[index] = updated;
+    });
 
-    /* ----------------------------------
-       LEADERBOARD
-    ---------------------------------- */
-    builder
-      .addCase(fetchGrandTestLeaderboard.pending, (state) => {
-        state.leaderboardStatus = "loading";
-      })
-      .addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
-        state.leaderboardStatus = "succeeded";
-        state.leaderboards[action.payload.mockTestId] =
-          action.payload.leaderboard;
-      })
-      .addCase(fetchGrandTestLeaderboard.rejected, (state, action) => {
-        state.leaderboardStatus = "failed";
-        state.leaderboardError = action.payload;
-      });
-  },
+    /* LEADERBOARD */
+    builder
+      .addCase(fetchGrandTestLeaderboard.pending, (state) => {
+        state.leaderboardStatus = "loading";
+      })
+      .addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
+        state.leaderboardStatus = "succeeded";
+        state.leaderboards[action.payload.mockTestId] =
+          action.payload.leaderboard;
+      })
+      .addCase(fetchGrandTestLeaderboard.rejected, (state, action) => {
+        state.leaderboardStatus = "failed";
+        state.leaderboardError = action.payload;
+      });
+  },
 });
 
 export const { setCategoryFilter } = mockTestSlice.actions;

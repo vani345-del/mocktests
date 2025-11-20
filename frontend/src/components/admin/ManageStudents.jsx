@@ -1,7 +1,12 @@
 import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchStudents, blockStudent, deleteStudent } from "../../redux/studentSlice";
+
+import {
+  fetchStudents,
+  blockStudent,
+  deleteStudent,
+} from "../../redux/adminStudentSlice";
 
 import {
   FaArrowLeft,
@@ -15,24 +20,30 @@ import {
 
 const ManageStudents = () => {
   const dispatch = useDispatch();
-  const { students, status, error } = useSelector((state) => state.students);
 
+  const { students, status, error } = useSelector(
+    (state) => state.adminStudents
+  );
+
+  // Initial load
   useEffect(() => {
     if (status === "idle") dispatch(fetchStudents());
   }, [status, dispatch]);
 
-  // ACTION HANDLERS
-  const handleBlock = (id, currentStatus) => {
-    dispatch(blockStudent({ id, status: !currentStatus }));
+  // BLOCK / UNBLOCK
+  const handleBlock = (id, isBlocked) => {
+    dispatch(blockStudent({ id, status: !isBlocked }));
   };
 
+  // DELETE
   const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this student?")) {
       dispatch(deleteStudent(id));
     }
   };
 
-  let content;
+  // CONTENT RENDERING
+  let content = null;
 
   if (status === "loading") {
     content = (
@@ -40,18 +51,14 @@ const ManageStudents = () => {
         <FaSpinner className="animate-spin text-4xl text-blue-600" />
       </div>
     );
-  }
-
-  else if (status === "failed") {
+  } else if (status === "failed") {
     content = (
       <div className="flex flex-col items-center justify-center p-10 text-red-600">
         <FaExclamationTriangle className="text-4xl mb-2" />
         <p>Error: {error}</p>
       </div>
     );
-  }
-
-  else if (status === "succeeded") {
+  } else if (status === "succeeded") {
     content = (
       <div className="overflow-x-auto">
         <table className="min-w-full bg-white rounded-lg">
@@ -70,7 +77,6 @@ const ManageStudents = () => {
             {students.length > 0 ? (
               students.map((s) => (
                 <tr key={s._id} className="hover:bg-gray-50 transition">
-                  
                   {/* NAME */}
                   <td className="px-6 py-4 font-semibold text-gray-900">
                     {s.firstName} {s.lastName}
@@ -80,7 +86,9 @@ const ManageStudents = () => {
                   <td className="px-6 py-4 text-gray-700">{s.email}</td>
 
                   {/* PHONE */}
-                  <td className="px-6 py-4 text-gray-700">{s.phone || "—"}</td>
+                  <td className="px-6 py-4 text-gray-700">
+                    {s.phone || "—"}
+                  </td>
 
                   {/* ROLE */}
                   <td className="px-6 py-4 capitalize text-gray-700">
@@ -103,7 +111,6 @@ const ManageStudents = () => {
                   {/* ACTIONS */}
                   <td className="px-6 py-4 text-center">
                     <div className="flex justify-center gap-3">
-
                       {/* BLOCK / UNBLOCK */}
                       <button
                         onClick={() => handleBlock(s._id, s.isBlocked)}
@@ -131,7 +138,6 @@ const ManageStudents = () => {
                       >
                         <FaTrash /> Delete
                       </button>
-
                     </div>
                   </td>
                 </tr>
@@ -151,7 +157,6 @@ const ManageStudents = () => {
 
   return (
     <div className="p-6">
-      
       {/* BACK BUTTON */}
       <Link
         to="/admin"
@@ -172,11 +177,10 @@ const ManageStudents = () => {
         </Link>
       </div>
 
-      {/* TABLE CARD */}
+      {/* TABLE */}
       <div className="bg-white shadow-xl rounded-xl border overflow-hidden">
         {content}
       </div>
-
     </div>
   );
 };

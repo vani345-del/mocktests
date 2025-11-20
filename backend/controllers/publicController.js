@@ -1,42 +1,44 @@
-// backend/controllers/publicController.js
-import Category from "../models/Category.js";
+// controllers/publicController.js
 import MockTest from "../models/MockTest.js";
 
-export const getPublicCategories = async (req, res) => {
-  try {
-    const categories = await Category.find({});
-    res.status(200).json({ categories });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
+// LIST published tests
 export const getPublicMockTests = async (req, res) => {
   try {
     const { q, category } = req.query;
 
-    let filter = {};
+    let filter = { isPublished: true };
 
-    // Search
+    // 🔍 Search by title
     if (q) {
       filter.title = { $regex: q, $options: "i" };
     }
 
-    // Filter by category slug (string)
+    // 🔥 FILTER BY CATEGORY (_id)
     if (category) {
-      filter.categorySlug = category;
+      filter.category = category;
     }
 
-    // Find tests using slug filter and populate category
     const mocktests = await MockTest.find(filter)
       .populate("category", "name slug");
 
-    const total = await MockTest.countDocuments(filter);
-
-    res.status(200).json({ mocktests, total });
-
+    return res.status(200).json(mocktests);
   } catch (err) {
-    console.error("Error in getPublicMockTests:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+// Single test
+export const getPublicMockTestById = async (req, res) => {
+  try {
+    const mock = await MockTest.findOne({
+      _id: req.params.id,
+      isPublished: true
+    }).populate("category", "name slug");
+
+    if (!mock) return res.status(404).json({ message: "Mock test not found" });
+
+    return res.status(200).json(mock);
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
   }
 };

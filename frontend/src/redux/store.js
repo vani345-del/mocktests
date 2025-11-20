@@ -8,6 +8,8 @@ import dashboardReducer from "./dashboardSlice.js";
 import instructorReducer from "./instructorSlice";
 // --- 👇 ADD THIS IMPORT ---
 import studentReducer from "./studentSlice";
+import paymentReducer from "./paymentSlice";
+import adminStudentReducer from "./adminStudentSlice";
 
 
 export const store=configureStore({
@@ -19,6 +21,8 @@ export const store=configureStore({
         dashboard: dashboardReducer,
         instructors: instructorReducer,
         students: studentReducer,
+        payment: paymentReducer,
+        adminStudents: adminStudentReducer, 
         
     }
 })

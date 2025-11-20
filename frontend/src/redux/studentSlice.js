@@ -1,106 +1,154 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../api/axios";
-import toast from "react-hot-toast";
 
-// ------------------------------------------------------
-// 1️⃣ Fetch All Students
-// ------------------------------------------------------
-export const fetchStudents = createAsyncThunk(
-  "students/fetchStudents",
-  async (_, { rejectWithValue }) => {
+/* ============================================================
+   FETCH PUBLIC MOCKTEST LIST (with ?q=&category=)
+============================================================ */
+export const fetchPublicMockTests = createAsyncThunk(
+  "students/fetchPublicMockTests",
+  async (queryString = "", { rejectWithValue }) => {
     try {
-      const { data } = await api.get("/api/admin/students");
-      return data;
+      const res = await api.get(`/api/public/mocktests${queryString}`);
+
+      // Backend may return [] or { mocktests: [] }
+      if (Array.isArray(res.data)) return res.data;
+      return res.data.mocktests || [];
+
     } catch (err) {
-      const message = err.response?.data?.message || err.message;
-      toast.error(message);
-      return rejectWithValue(message);
+      return rejectWithValue(
+        err.response?.data?.message || "Failed to load mock tests"
+      );
     }
   }
 );
 
-// ------------------------------------------------------
-// 2️⃣ Block / Unblock Student
-// ------------------------------------------------------
-export const blockStudent = createAsyncThunk(
-  "students/blockStudent",
-  async ({ id, status }, { rejectWithValue }) => {
-    try {
-      const { data } = await api.put(`/api/admin/students/${id}/toggle-block`, {
-        isBlocked: status,
-      });
-
-      toast.success(data.message);
-      return data.student; // updated student
-    } catch (err) {
-      const message = err.response?.data?.message || err.message;
-      toast.error(message);
-      return rejectWithValue(message);
-    }
-  }
-);
-
-// ------------------------------------------------------
-// 3️⃣ Delete Student
-// ------------------------------------------------------
-export const deleteStudent = createAsyncThunk(
-  "students/deleteStudent",
+/* ============================================================
+   FETCH PUBLIC TEST BY ID
+============================================================ */
+export const fetchPublicTestById = createAsyncThunk(
+  "students/fetchPublicTestById",
   async (id, { rejectWithValue }) => {
     try {
-      const { data } = await api.delete(`/api/admin/students/${id}`);
-      toast.success("Student deleted.");
-      return id; // only returning ID to remove from state
+      const res = await api.get(`/api/public/mocktests/${id}`);
+      return res.data;
     } catch (err) {
-      const message = err.response?.data?.message || err.message;
-      toast.error(message);
-      return rejectWithValue(message);
+      return rejectWithValue(
+        err.response?.data?.message || "Failed to load mock test"
+      );
     }
   }
 );
 
-// ------------------------------------------------------
-// Slice
-// ------------------------------------------------------
+/* ============================================================
+   PUBLIC LEADERBOARD
+============================================================ */
+export const fetchGrandTestLeaderboard = createAsyncThunk(
+  "students/leaderboard",
+  async (mockTestId, { rejectWithValue }) => {
+    try {
+      const res = await api.get(
+        `/api/public/mocktests/${mockTestId}/leaderboard`
+      );
+
+      return { mockTestId, leaderboard: res.data };
+    } catch (err) {
+      return rejectWithValue(
+        err.response?.data?.message || "Leaderboard not available"
+      );
+    }
+  }
+);
+
+/* ============================================================
+   INITIAL STATE
+============================================================ */
 const initialState = {
-  students: [],
-  status: "idle",
-  error: null,
+  publicMocktests: [],
+  publicStatus: "idle",
+  publicError: null,
+
+  selectedMocktest: null,
+  selectedStatus: "idle",
+  selectedError: null,
+
+  leaderboards: {},
+
+  filters: {
+    q: "",
+    category: "",
+    limit: 0, // (future use)
+  },
 };
 
+/* ============================================================
+   SLICE
+============================================================ */
 const studentSlice = createSlice({
   name: "students",
   initialState,
-  reducers: {},
+
+  reducers: {
+    // SEARCH filter
+    setPublicSearch(state, action) {
+      state.filters.q = action.payload;
+    },
+
+    // CATEGORY filter
+    setPublicCategoryFilter(state, action) {
+      state.filters.category = action.payload;
+    },
+
+    // RESET filters (helpful for AllMockTests reset)
+    resetPublicFilters(state) {
+      state.filters = { q: "", category: "", limit: 0 };
+      state.publicMocktests = [];
+    }
+  },
+
   extraReducers: (builder) => {
+    /* PUBLIC LIST */
     builder
-      // FETCH
-      .addCase(fetchStudents.pending, (state) => {
-        state.status = "loading";
+      .addCase(fetchPublicMockTests.pending, (state) => {
+        state.publicStatus = "loading";
+        state.publicError = null;
       })
-      .addCase(fetchStudents.fulfilled, (state, action) => {
-        state.status = "succeeded";
-        state.students = action.payload;
+      .addCase(fetchPublicMockTests.fulfilled, (state, action) => {
+        state.publicStatus = "succeeded";
+        state.publicMocktests = action.payload;
       })
-      .addCase(fetchStudents.rejected, (state, action) => {
-        state.status = "failed";
-        state.error = action.payload;
-      })
-
-      // BLOCK / UNBLOCK
-      .addCase(blockStudent.fulfilled, (state, action) => {
-        const updated = action.payload;
-        const index = state.students.findIndex((s) => s._id === updated._id);
-        if (index !== -1) {
-          state.students[index] = updated;
-        }
-      })
-
-      // DELETE
-      .addCase(deleteStudent.fulfilled, (state, action) => {
-        const id = action.payload;
-        state.students = state.students.filter((s) => s._id !== id);
+      .addCase(fetchPublicMockTests.rejected, (state, action) => {
+        state.publicStatus = "failed";
+        state.publicError = action.payload;
+        state.publicMocktests = [];
       });
+
+    /* SINGLE TEST */
+    builder
+      .addCase(fetchPublicTestById.pending, (state) => {
+        state.selectedStatus = "loading";
+        state.selectedMocktest = null;
+      })
+      .addCase(fetchPublicTestById.fulfilled, (state, action) => {
+        state.selectedStatus = "succeeded";
+        state.selectedMocktest = action.payload;
+      })
+      .addCase(fetchPublicTestById.rejected, (state, action) => {
+        state.selectedStatus = "failed";
+        state.selectedError = action.payload;
+      });
+
+    /* LEADERBOARD */
+    builder.addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
+      state.leaderboards[action.payload.mockTestId] =
+        action.payload.leaderboard;
+    });
   },
 });
+
+export const {
+  setPublicCategoryFilter,
+  setPublicSearch,
+  resetPublicFilters,
+} = studentSlice.actions;
 
 export default studentSlice.reducer;

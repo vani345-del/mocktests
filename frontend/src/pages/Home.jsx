@@ -1,7 +1,7 @@
-// src/pages/Home.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import HeroSection from "../components/sections/HeroSection";
@@ -9,8 +9,14 @@ import FeaturesSection from "../components/sections/FeaturesSection";
 import CategoriesSection from "../components/sections/CategoriesSection";
 import FeaturedTestsSection from "../components/sections/FeaturedTestsSection";
 import TestimonialsSection from "../components/sections/TestimonialsSection";
+
+import MockTestCard from "../components/MockTestCard";
+import PremiumTestCard from "../components/PremiumTestCard";
+
 import { fetchCategories } from "../redux/categorySlice";
-import { fetchPublicMockTests } from "../redux/mockTestSlice";
+
+// ✅ FIX: Public tests must be imported from studentSlice
+import { fetchPublicMockTests } from "../redux/studentSlice";
 
 const Home = () => {
   const dispatch = useDispatch();
@@ -21,94 +27,74 @@ const Home = () => {
     (state) => state.category
   );
 
-  // grab the raw mocktest state
-  const mocktestState = useSelector((state) => state.mocktest);
-  const publicStatus = mocktestState.publicStatus;
-  const rawPublicMocktests = mocktestState.publicMocktests;
+  // ✔ public mocktests come from studentSlice
+  const {
+    publicMocktests,
+    publicStatus,
+  } = useSelector((state) => state.students);
 
-  // normalize to an array no matter what shape it is
-  const publicMocktests = Array.isArray(rawPublicMocktests)
-    ? rawPublicMocktests
-    : (rawPublicMocktests && rawPublicMocktests.mocktests) || [];
+  // show only first 4 tests on home page
+  const mockTests = publicMocktests.slice(0, 4);
+  const grandTests = []; // until type is added
 
   useEffect(() => {
     dispatch(fetchCategories());
-    // fetch latest 4 published tests for home
-    dispatch(fetchPublicMockTests("?limit=4"));
+    dispatch(fetchPublicMockTests("?limit=4")); // public API call
   }, [dispatch]);
 
+  // Search button
   const handleSearch = (e) => {
     e.preventDefault();
-    const query = search ? `?q=${encodeURIComponent(search)}&limit=50` : "?limit=50";
-    dispatch(fetchPublicMockTests(query));
     navigate(`/mocktests?q=${encodeURIComponent(search)}`);
   };
 
+  // Category click
   const handleCategoryClick = (category) => {
     const slug = category.slug || category._id || category;
-    dispatch(fetchPublicMockTests(`?category=${encodeURIComponent(slug)}&limit=50`));
     navigate(`/mocktests?category=${encodeURIComponent(slug)}`);
   };
 
-  // ----- Defensive logic for filtering by type -----
-  // If items contain a 'type' field, use it to split Mock/Grand.
-  // If not, we fallback to showing all items in the Mock section (home).
-  const hasTypeField = publicMocktests.some((t) => t && Object.prototype.hasOwnProperty.call(t, "type"));
-
-  const mockTests = hasTypeField
-    ? publicMocktests.filter((t) => t.type === "Mock").slice(0, 4)
-    : publicMocktests.slice(0, 4); // fallback: show latest 4
-
-  const grandTests = hasTypeField
-    ? publicMocktests.filter((t) => t.type === "Grand").slice(0, 4)
-    : []; // fallback: if no type, we won't duplicate same items in Grand section
-
-  // DEBUG logs - remove after verifying
-  console.log("DEBUG: publicStatus =", publicStatus);
-  console.log("DEBUG: rawPublicMocktests:", rawPublicMocktests);
-  console.log("DEBUG: normalized publicMocktests length:", publicMocktests.length);
-  console.log("DEBUG: mockTests to render:", mockTests);
-  console.log("DEBUG: grandTests to render:", grandTests);
-
   return (
-    <div className="min-h-screen bg-white font-sans">
+    <div className="min-h-screen bg-gray-950 font-sans antialiased text-gray-100">
       <Navbar />
+
       <main>
         <HeroSection
           search={search}
           setSearch={setSearch}
           onSubmit={handleSearch}
         />
+
         <FeaturesSection />
+
         <CategoriesSection
           categories={categories}
           loading={categoryLoading}
           onCategoryClick={handleCategoryClick}
         />
 
+        {/* Featured Mock Tests */}
         <FeaturedTestsSection
           id="mock-tests"
-          title="Featured Mock Tests"
+          title="Top Rated Mock Series"
           tests={mockTests}
           loading={publicStatus === "loading"}
           showViewAll
-          onViewAll={() => {
-            dispatch(fetchPublicMockTests("?limit=50"));
-            navigate("/mocktests");
-          }}
+          pageContext="home"
+          CardComponent={MockTestCard}
+          onViewAll={() => navigate("/mocktests")}
         />
 
-        <div className="bg-gray-50">
+        <div className="bg-gray-900 border-t border-b border-gray-800">
           <FeaturedTestsSection
             id="grand-tests"
-            title="All-India Grand Tests"
+            title="All-India Grand Tests - Live Ranks"
             tests={grandTests}
             loading={publicStatus === "loading"}
             showViewAll
-            onViewAll={() => {
-              dispatch(fetchPublicMockTests("?limit=50"));
-              navigate("/mocktests");
-            }}
+            pageContext="home"
+            CardComponent={PremiumTestCard}
+            onViewAll={() => navigate("/mocktests")}
           />
         </div>
 

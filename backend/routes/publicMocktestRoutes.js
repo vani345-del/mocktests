@@ -1,13 +1,13 @@
 // routes/publicMocktestRoutes.js
 import express from "express";
-import { getMockTests, getMockTestById } from "../controllers/mockTestController.js";
+import { getPublicMockTests, getPublicMockTestById } from "../controllers/publicController.js";
 
 const router = express.Router();
 
-// GET /api/public/mocktests?q=...&category=...&limit=4
-router.get("/", getMockTests);
+// GET All published tests with search + category filters
+router.get("/", getPublicMockTests);
 
-// GET /api/public/mocktests/:id
-router.get("/:id", getMockTestById);
+// GET Single published test
+router.get("/:id", getPublicMockTestById);
 
 export default router;

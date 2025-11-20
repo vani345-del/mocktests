@@ -1,50 +1,56 @@
-// src/components/FiltersPanel.jsx
 import React from "react";
 
-const FiltersPanel = ({ categories, loading, selectedCategory, onSelectCategory }) => (
-  <div className="p-5 border border-gray-200 rounded-lg shadow-md bg-white sticky top-24">
-    <h4 className="font-bold text-lg text-gray-900 mb-4 pb-3 border-b border-gray-200">
-      Categories
-    </h4>
-    
-    <div className="space-y-1">
-      {/* All Categories Button */}
-      <button
-        onClick={() => onSelectCategory("")}
-        className={`block w-full text-left py-2.5 px-3.5 rounded-md text-sm font-medium transition-all duration-150 ${
-          !selectedCategory 
-            ? "bg-blue-100 text-blue-700" 
-            : "text-slate-600 hover:bg-gray-100 hover:text-slate-800"
-        }`}
-      >
-        All Categories
-      </button>
-      
-      {/* Loading Skeleton */}
-      {loading && (
-        <div className="space-y-1 pt-2">
-          <div className="h-7 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="h-7 bg-gray-200 rounded-md animate-pulse"></div>
-          <div className="h-7 bg-gray-200 rounded-md animate-pulse"></div>
-        </div>
-      )}
+const FiltersPanel = ({
+  categories = [],
+  loading = false,
+  selectedCategory = "",
+  onSelectCategory,
+}) => {
+  return (
+    <div className="p-5 border border-gray-700 rounded-lg shadow bg-gray-900 text-white">
+      <h4 className="font-bold text-lg mb-4">Categories</h4>
 
-      {/* Category List */}
-      {!loading && categories.map((cat) => (
-        <button
-          key={cat._id}
-          onClick={() => onSelectCategory(cat.slug)}
-          className={`block w-full text-left py-2.5 px-3.5 rounded-md text-sm font-medium transition-all duration-150 ${
-            selectedCategory === cat.slug
-              ? "bg-blue-100 text-blue-700"
-              : "text-slate-600 hover:bg-gray-100 hover:text-slate-800"
-          }`}
-        >
-          {cat.name}
-        </button>
-      ))}
+      {loading && <p className="text-gray-400">Loading...</p>}
+
+      {!loading && (
+        <ul className="space-y-2">
+          {/* ALL BUTTON */}
+          <li>
+            <button
+              onClick={() => onSelectCategory("")}
+              className={`block w-full text-left px-3 py-2 rounded transition ${
+                selectedCategory === ""
+                  ? "bg-cyan-600 text-white"
+                  : "hover:bg-gray-800"
+              }`}
+            >
+              All
+            </button>
+          </li>
+
+          {/* CATEGORY LIST */}
+          {categories.map((cat) => (
+            <li key={cat._id}>
+              <button
+                onClick={() => onSelectCategory(cat._id)}
+                className={`block w-full text-left px-3 py-2 rounded transition ${
+                  selectedCategory === cat._id
+                    ? "bg-cyan-600 text-white"
+                    : "hover:bg-gray-800"
+                }`}
+              >
+                {cat.name}
+              </button>
+            </li>
+          ))}
+
+          {categories.length === 0 && (
+            <li className="text-gray-400">No categories found.</li>
+          )}
+        </ul>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 export default FiltersPanel;

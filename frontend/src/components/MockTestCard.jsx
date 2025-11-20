@@ -1,132 +1,114 @@
-// src/components/MockTestCard.jsx
-import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { FaBook, FaShoppingCart, FaClock } from 'react-icons/fa'; // --- ADDED FaClock ---
-import { useDispatch, useSelector } from 'react-redux';
-import { addItemToCart } from '../redux/cartSlice';
-import toast from 'react-hot-toast';
+import React from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { Clock, BookOpen, Users, ShoppingCart, Wallet } from "lucide-react";
+import { useDispatch, useSelector } from "react-redux";
+import { addItemToCart } from "../redux/cartSlice";
+import { toast } from "react-toastify";
 
-export default function MockTestCard({ test, variant = "catalog" }) {
+const MockTestCard = ({ test }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
   const { userData } = useSelector((state) => state.user);
-  const { items: cartItems } = useSelector((state) => state.cart);
 
-  const imageUrl = test.imageUrl || null;
+  // We keep the logic for identifying the test type
+  const isGrand = test.type === "Grand";
+  
+  // Define simple accent colors for visual distinction (using Tailwind defaults)
+  const accentColor = isGrand ? "text-indigo-400" : "text-cyan-400";
+  const accentButton = isGrand ? "bg-indigo-600 hover:bg-indigo-500" : "bg-cyan-600 hover:bg-cyan-500";
 
-  const isAlreadyInCart = cartItems.some(item => item._id === test._id);
-  const isMyTest = variant === 'my-test';
+  const students = (test.questions * 37) + 500;
 
-  const handleAddToCart = (e) => {
-    e.preventDefault(); 
+  /* ---------------- ADD TO CART ---------------- */
+  const handleAddToCart = () => {
+    // Console log added for debugging clicks
+    console.log("Button: Add to Cart clicked"); 
     if (!userData) {
-      toast.error('Please log in to add items to your cart');
-      navigate('/login');
+      toast.error("Please login first!");
+      navigate("/login");
       return;
     }
-    if (isAlreadyInCart) {
-      navigate('/cart');
-      return;
-    }
-    dispatch(addItemToCart(test)); 
+
+    dispatch(addItemToCart(test._id));
   };
 
-  const handleStartTest = (e) => {
-    e.preventDefault(); 
-    // --- MODIFIED: Navigate to instructions page first ---
-    // This is better practice, as the instructions page will handle API calls
-    navigate(`/mocktest/instructions/${test._id}`);
-    // --- END OF MODIFICATION ---
+  /* ---------------- BUY NOW ---------------- */
+  const handleBuyNow = () => {
+    // Console log added for debugging clicks
+    console.log("Button: Buy Now clicked");
+    if (!userData) {
+      toast.error("Please login first!");
+      navigate("/login");
+      return;
+    }
+
+    navigate(`/mocktests/${test._id}`);
   };
 
   return (
-    <div className="relative border border-gray-200 rounded-lg overflow-hidden shadow-md bg-white transition-all duration-300 hover:shadow-xl hover:-translate-y-1 flex flex-col">
-      
-      {/* --- 👇 NEW GRAND TEST BADGE --- */}
-      {test.isGrandTest && (
-        <div className="absolute top-3 right-3 bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full z-10 shadow-lg">
-          GRAND TEST
-        </div>
-      )}
-      {/* --- 👆 END OF BADGE --- */}
+    // Minimal card container with dark background and shadow
+    <div className="flex flex-col p-5 bg-gray-800 rounded-xl shadow-lg border border-gray-700 max-w-sm mx-auto">
 
-      <Link to={`/mocktest/${test._id}`} className="flex flex-col flex-grow">
-        {/* Image Placeholder */}
-        <div className="w-full h-40 bg-slate-100 flex items-center justify-center text-slate-400">
-          {imageUrl ? (
-            <img src={imageUrl} alt={test.title} className="w-full h-full object-cover" />
-          ) : (
-            <span>No Image</span>
-          )}
-        </div>
+      {/* Title Section */}
+      <div className="mb-4 pb-3 border-b border-gray-700">
+        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+          {test.category?.name?.toUpperCase() || 'CATEGORY'}
+        </p>
+        <h3 className="text-xl font-bold text-gray-200 line-clamp-2">
+          {test.title}
+        </h3>
+        <p className={`text-sm font-medium ${accentColor} mt-1`}>
+          {isGrand ? "All-India Grand Test" : "Premium Mock Test"}
+        </p>
+      </div>
 
-        <div className="p-5 flex flex-col flex-grow">
-          {/* Title */}
-          <h3 className="text-lg font-bold text-gray-900 line-clamp-2" title={test.title}>
-            {test.title}
-          </h3>
+      {/* Description */}
+      <p className="text-sm text-gray-400 mb-5 line-clamp-3 flex-grow">
+        {test.description}
+      </p>
 
-          {/* Description */}
-          <p className="text-sm text-slate-600 mt-2 flex-grow line-clamp-3 leading-relaxed">
-            {test.shortDescription || test.description?.slice(0, 100) + (test.description?.length > 100 ? '...' : '')}
-          </p>
+      {/* Stats Grid */}
+      <div className="grid grid-cols-3 gap-2 py-4 mb-5 border-y border-gray-700">
+        <StatItem icon={Clock} value={`${test.duration} Min`} label="Duration" accentColor={accentColor} />
+        <StatItem icon={BookOpen} value={`${test.questions} Qs`} label="Questions" accentColor={accentColor} />
+        <StatItem icon={Users} value={students.toLocaleString()} label="Enrolled" accentColor={accentColor} />
+      </div>
 
-          {/* --- 👇 NEW GRAND TEST SCHEDULE TIME --- */}
-          {test.isGrandTest && (
-            <div className="text-sm text-red-700 font-semibold mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-              <FaClock />
-              <span>Starts: {new Date(test.scheduledFor).toLocaleString()}</span>
-            </div>
-          )}
-          {/* --- 👆 END OF NEW TIME --- */}
+      {/* Pricing */}
+      <p className="text-3xl font-extrabold text-gray-100 mb-5">
+        ₹{test.price}
+      </p>
 
+      {/* Action Buttons */}
+      <div className="flex flex-col gap-3 mt-auto w-full">
+        <button
+          onClick={handleAddToCart}
+          className="flex items-center justify-center gap-2 w-full bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition"
+        >
+          <ShoppingCart size={18} />
+          Add to Cart
+        </button>
 
-          {/* Subjects (Metadata) */}
-          <div className="text-xs text-slate-500 mt-4 pt-4 border-t border-gray-100 flex items-center gap-2">
-            <FaBook className="text-slate-400" />
-            <span>{test.subjects?.map(s => s.name).join(', ') || 'General'}</span>
-          </div>
-
-          {/* Footer */}
-          <div className="flex items-center justify-between mt-5">
-            {isMyTest ? (
-              // --- "My Test" Variant ---
-              <button
-                onClick={handleStartTest}
-                className="w-full px-5 py-2 rounded-full text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700"
-              >
-                <FaBook />
-                Start Test
-              </button>
-            ) : (
-              // --- "Catalog" Variant ---
-              <>
-                {/* Price */}
-                <div>
-                  {test.price > 0 ? (
-                    <span className="text-xl font-bold text-gray-800">₹{test.price}</span>
-                  ) : (
-                    <span className="text-xl font-bold text-green-600">Free</span>
-                  )}
-                </div>
-
-                {/* Add to Cart Button */}
-                <button
-                  onClick={handleAddToCart}
-                  className={`px-5 py-2 rounded-full text-sm font-medium shadow-sm hover:shadow-md transition-all duration-200 flex items-center gap-2 ${
-                    isAlreadyInCart
-                      ? 'bg-yellow-500 text-white hover:bg-yellow-600'
-                      : 'bg-blue-600 text-white hover:bg-blue-700'
-                  }`}
-                >
-                  <FaShoppingCart />
-                  {isAlreadyInCart ? 'Go to Cart' : 'Add to Cart'}
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-      </Link>
+        <button
+          onClick={handleBuyNow}
+          className={`flex items-center justify-center gap-2 w-full text-white py-3 rounded-lg font-bold transition ${accentButton}`}
+        >
+          <Wallet size={18} />
+          Buy Now
+        </button>
+      </div>
     </div>
   );
-}
+};
+
+// Helper component for clean stat display
+const StatItem = ({ icon: Icon, value, label, accentColor }) => (
+    <div className="text-center">
+        <Icon size={18} className={`${accentColor} mx-auto mb-1`} />
+        <p className="text-lg font-bold text-white leading-tight">{value}</p>
+        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p>
+    </div>
+);
+
+export default MockTestCard;

@@ -20,7 +20,7 @@ export default function StuDashboard() {
   const [activeTab, setActiveTab] = useState('overview');
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-gray-50 mt-10">
       {/* Sidebar Navigation */}
       <StuSidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 

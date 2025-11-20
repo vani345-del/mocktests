@@ -2,7 +2,8 @@ import express from "express";
 import { createCategory } from "../controllers/addCatAdmin.js";
 import { uploadImage } from '../middleware/upload.js';
 import { getPassagesByCategory } from "../controllers/questionController.js";
-
+import { getPaymentHistory } from "../controllers/paymentController.js";
+import { isAuth } from "../middleware/isAuth.js";
 const router = express.Router();
 
 router.post('/upload-image', (req, res) => {
@@ -25,6 +26,7 @@ router.post("/", uploadImage.single("image"), createCategory);
 router.get("/questions/passages", getPassagesByCategory);
 
 // Passage + children
+router.get("/payments", isAuth, getPaymentHistory);
 
 
 export default router;

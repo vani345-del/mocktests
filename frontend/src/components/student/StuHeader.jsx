@@ -11,13 +11,7 @@ const StuHeader = ({ user }) => {
           Let's get started on your next goal.
         </p>
       </div>
-      <div className="flex items-center">
-        <img
-          src={user.avatar}
-          alt="User Avatar"
-          className="w-12 h-12 rounded-full border-2 border-blue-500"
-        />
-      </div>
+     
     </header>
   );
 };

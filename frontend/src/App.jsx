@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import React from "react";
 import { ToastContainer } from "react-toastify";
 import ScrollToTop from "./components/ScrollToTop";
@@ -31,16 +32,21 @@ import AllMockTests from "./pages/AllMockTests";
 import MockTestDetail from "./pages/MockTestDetail";
 import Cart from "./pages/Cart";
 import Checkout from "./pages/Checkout";
-import AddInstructor from './components/admin/AddInstructor'
+import AddInstructor from "./components/admin/AddInstructor";
 
 import { Toaster } from "react-hot-toast";
 import AddStudent from "./components/admin/AddStudent";
-import PaymentManagement from './components/admin/PaymentManagement'
+import PaymentManagement from "./components/admin/PaymentManagement";
+
+// ------------------------- MAIN LAYOUT -------------------------
 
 const MainLayout = ({ children }) => {
   const location = useLocation();
+
+  // Hide Navbar & Footer on: admin, login, signup, student-dashboard
   const hideLayout =
     location.pathname.startsWith("/admin") ||
+    location.pathname.startsWith("/student-dashboard") || // ✅ HIDE LAYOUT HERE
     location.pathname === "/login" ||
     location.pathname === "/signup";
 
@@ -53,6 +59,8 @@ const MainLayout = ({ children }) => {
     </>
   );
 };
+
+// ------------------------- MAIN APP -------------------------
 
 const App = () => {
   const { userData } = useSelector((state) => state.user);
@@ -108,7 +116,7 @@ const App = () => {
             element={userData ? <Checkout /> : <Navigate to="/login" replace />}
           />
 
-          {/* STUDENT DASHBOARD */}
+          {/* ---------------- STUDENT DASHBOARD ---------------- */}
           <Route
             path="/student-dashboard"
             element={
@@ -138,17 +146,17 @@ const App = () => {
             {/* ADMIN HOME */}
             <Route index element={<DashboardPage />} />
 
-            {/* USERS SECTION (Nested properly) */}
+            {/* USERS SECTION */}
             <Route path="users">
-              {/* INSTRUCTORS */}
               <Route path="instructors/manage" element={<ManageInstructors />} />
               <Route path="instructors/add" element={<AddInstructor />} />
 
-              {/* STUDENTS */}
               <Route path="students/manage" element={<ManageStudents />} />
               <Route path="students/add" element={<AddStudent />} />
             </Route>
-             <Route path="payments" element={<PaymentManagement/>}/>
+
+            {/* PAYMENT MANAGEMENT */}
+            <Route path="payments" element={<PaymentManagement />} />
 
             {/* CATEGORIES */}
             <Route path="categories" element={<CategoryPage />} />
@@ -158,7 +166,6 @@ const App = () => {
               <Route path="manage-tests" element={<ManageMocktests />} />
               <Route path="add-new-test" element={<SelectCategoryForCreation />} />
             </Route>
-
 
             {/* LEGACY MOCKTEST ROUTES */}
             <Route path="mocktests" element={<ManageMocktests />} />

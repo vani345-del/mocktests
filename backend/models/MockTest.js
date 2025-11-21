@@ -1,21 +1,21 @@
-// models/MockTest.js - UPDATED
+// models/MockTest.js
 import mongoose from "mongoose";
 
-// The structure for how many questions of each difficulty are needed per subject
+// Subject Schema
 const SubjectSchema = new mongoose.Schema({
     name: { type: String, required: true },
     easy: { type: Number, default: 0 },
     medium: { type: Number, default: 0 },
     hard: { type: Number, default: 0 },
-}, { _id: false }); // No _id for embedded schemas
+}, { _id: false });
 
-// We remove the embedded QuestionSchema and use this for the attempt reference
+// Attempt Schema
 const attemptSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     answers: [
         {
-            questionId: { type: mongoose.Schema.Types.ObjectId, required: true }, // Should reference the main Question model
-            selectedAnswer: String, // Stored answer (e.g., selected option text or index)
+            questionId: { type: mongoose.Schema.Types.ObjectId, required: true },
+            selectedAnswer: String,
             isCorrect: Boolean,
         },
     ],
@@ -23,42 +23,50 @@ const attemptSchema = new mongoose.Schema({
     submittedAt: Date,
 });
 
+// Main MockTest Schema
 const MockTestSchema = new mongoose.Schema({
     subcategory: String,
     title: { type: String, required: true },
     description: String,
     durationMinutes: { type: Number, default: 60 },
-    // totalQuestions and totalMarks can be computed from the questions/subjects array
+
     totalQuestions: { type: Number, default: 0 },
     totalMarks: { type: Number, default: 0 },
     negativeMarking: { type: Number, default: 0 },
+
     price: { type: Number, required: true, default: 0 },
-    category: { type: mongoose.Schema.Types.ObjectId, ref: 'Category', required: true },
-    categorySlug: String,
     discountPrice: { type: Number, default: 0 },
+
+    // 🔥 Thumbnail + Free flag
+    thumbnail: { type: String, default: null },
+    isFree: { type: Boolean, default: false },
+
+    // 🔥 PUBLISH STATUS (You were missing this!)
     isPublished: { type: Boolean, default: false },
 
-    // This defines the STRUCTURE/REQUIREMENTS for the test
-    subjects: [SubjectSchema], 
+    category: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: true },
+    categorySlug: String,
 
-    // This stores the REFERENCES to the actual questions chosen for this test
-    // Use an ObjectId to reference the main Question collection
-    questionIds: [{
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Question', // <-- Reference your separate Question model
-        required: true
-    }],
-    
-    isGrandTest: { type: Boolean, default: false },
+    subjects: [SubjectSchema],
+
+    questionIds: [
+        {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Question",
+            required: true,
+        },
+    ],
+
+   isGrandTest: { type: Boolean, default: false },
+
     scheduledFor: {
         type: Date,
-        required: function() { return this.isGrandTest; } 
+        required: function () {
+            // This ensures scheduledFor is ONLY required if isGrandTest is true (or truthy).
+            return this.isGrandTest;
+        },
     },
-
-    // You might want to move attempts to a separate collection for scaling, 
-    // but keeping it here for simplicity:
-    attempts: [attemptSchema], 
-
+    attempts: [attemptSchema],
 }, { timestamps: true });
 
 export default mongoose.model("MockTest", MockTestSchema);

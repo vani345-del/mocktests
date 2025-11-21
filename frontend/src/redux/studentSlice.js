@@ -59,6 +59,20 @@ export const fetchGrandTestLeaderboard = createAsyncThunk(
   }
 );
 
+export const fetchPerformanceHistory = createAsyncThunk(
+  "user/fetchPerformanceHistory",
+  async (_, { rejectWithValue }) => {
+    try {
+      // Calls the new backend endpoint
+      const response = await api.get(`/api/student/attempts/finished`); 
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || error.message);
+    }
+  }
+);
+//
+
 /* ============================================================
    INITIAL STATE
 ============================================================ */
@@ -70,6 +84,10 @@ const initialState = {
   selectedMocktest: null,
   selectedStatus: "idle",
   selectedError: null,
+
+    attemptsHistory: [], 
+    attemptsHistoryStatus: "idle",
+    attemptsHistoryError: null,
 
   leaderboards: {},
 
@@ -135,13 +153,28 @@ const studentSlice = createSlice({
       .addCase(fetchPublicTestById.rejected, (state, action) => {
         state.selectedStatus = "failed";
         state.selectedError = action.payload;
-      });
+      })
+        // --- ADDED: Handlers for fetchPerformanceHistory ---
+      .addCase(fetchPerformanceHistory.pending, (state) => {
+        state.attemptsHistoryStatus = "loading";
+        state.attemptsHistoryError = null;
+      })
+      .addCase(fetchPerformanceHistory.fulfilled, (state, action) => {
+        state.attemptsHistoryStatus = "succeeded";
+        state.attemptsHistory = action.payload; // Store the list of finished attempts
+      })
+      .addCase(fetchPerformanceHistory.rejected, (state, action) => {
+        state.attemptsHistoryStatus = "failed";
+        state.attemptsHistoryError = action.payload;
+        state.attemptsHistory = [];
+      })
 
     /* LEADERBOARD */
     builder.addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
       state.leaderboards[action.payload.mockTestId] =
         action.payload.leaderboard;
     });
+    
   },
 });
 

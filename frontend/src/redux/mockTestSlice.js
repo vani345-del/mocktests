@@ -1,15 +1,16 @@
+// frontend/src/redux/mockTestSlice.js
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import api from "../api/axios";
 
 /* ============================================================
-   1️⃣ PUBLIC — FETCH ALL MOCKTESTS
+    1️⃣ PUBLIC — FETCH ALL MOCKTESTS
 ============================================================= */
 export const fetchPublicMockTests = createAsyncThunk(
   "mocktests/fetchPublic",
   async (query = "", { rejectWithValue }) => {
     try {
       const res = await api.get(`/api/public/mocktests${query}`);
-      return res.data;  // BACKEND RETURNS ARRAY
+      return res.data;
     } catch (err) {
       return rejectWithValue("Failed to load public mock tests");
     }
@@ -17,21 +18,22 @@ export const fetchPublicMockTests = createAsyncThunk(
 );
 
 /* ============================================================
-   2️⃣ PUBLIC — FETCH TEST BY ID
-============================================================== */
+    2️⃣ PUBLIC — FETCH TEST BY ID
+============================================================= */
 export const fetchPublicTestById = createAsyncThunk(
   "mocktests/fetchPublicById",
   async (id, { rejectWithValue }) => {
     try {
       const res = await api.get(`/api/public/mocktests/${id}`);
-      return res.data;  // BACKEND RETURNS OBJECT
+      return res.data;
     } catch (err) {
       return rejectWithValue("Failed to load mocktest");
     }
   }
 );
+
 /* ============================================================
-   3️⃣ ADMIN — FETCH ALL MOCKTESTS
+    3️⃣ ADMIN — FETCH ALL MOCKTESTS
 ============================================================= */
 export const fetchAdminMockTests = createAsyncThunk(
   "mocktests/fetchAdmin",
@@ -51,22 +53,71 @@ export const fetchAdminMockTests = createAsyncThunk(
 );
 
 /* ============================================================
-   4️⃣ ADMIN — CREATE MOCKTEST
+    Helper: appendFormDataSafely
+    - skips empty/null/undefined values
+    - handles File thumbnail
+    - stringifies subjects
+============================================================= */
+function appendFormDataSafely(formData, payload) {
+  Object.keys(payload).forEach((key) => {
+    const value = payload[key];
+
+    // Skip empty scheduledFor to avoid Date cast errors in Mongoose
+    if (key === "scheduledFor" && (value === null || value === undefined || value === "")) {
+      return;
+    }
+
+    // Thumbnail only appended when it's an actual File (new upload)
+    if (key === "thumbnail") {
+      if (value instanceof File) {
+        formData.append("thumbnail", value);
+      }
+      return;
+    }
+
+    // Subjects must be JSON string
+    if (key === "subjects") {
+      if (value !== undefined && value !== null) {
+        formData.append("subjects", JSON.stringify(value));
+      }
+      return;
+    }
+
+    // Skip null/undefined/empty-string values (prevents accidental bad casts)
+    if (value === null || value === undefined || value === "") {
+      return;
+    }
+
+    // For boolean false or numeric 0 we still append (so only skip empty string/null/undefined)
+    formData.append(key, value);
+  });
+}
+
+/* ============================================================
+    4️⃣ ADMIN — CREATE MOCKTEST (FormData)
 ============================================================= */
 export const createMockTest = createAsyncThunk(
   "mocktests/create",
   async (payload, { rejectWithValue }) => {
     try {
-      const res = await api.post("/api/admin/mocktests", payload);
-      return res.data.mocktest;
+      const formData = new FormData();
+
+      appendFormDataSafely(formData, payload);
+
+      const res = await api.post("/api/admin/mocktests", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      return res.data.mocktest || res.data;
     } catch (err) {
-      return rejectWithValue("Failed to create mocktest");
+      // optionally inspect err.response?.data for more accurate messages
+      return rejectWithValue(err.response?.data?.message || "Failed to create mocktest");
     }
   }
 );
 
 /* ============================================================
-   5️⃣ ADMIN — FETCH MOCKTEST FOR EDIT
+    5️⃣ ADMIN — FETCH MOCKTEST FOR EDIT
 ============================================================= */
 export const fetchMockTestByIdForEdit = createAsyncThunk(
   "mocktests/fetchByIdForEdit",
@@ -81,22 +132,32 @@ export const fetchMockTestByIdForEdit = createAsyncThunk(
 );
 
 /* ============================================================
-   6️⃣ ADMIN — UPDATE MOCKTEST
+    6️⃣ ADMIN — UPDATE MOCKTEST (FormData)
+    - only append thumbnail when it's a File (new upload)
+    - skip empty scheduledFor
+    - skip empty strings for other fields
 ============================================================= */
 export const updateMockTest = createAsyncThunk(
   "mocktests/update",
   async ({ id, ...payload }, { rejectWithValue }) => {
     try {
-      const res = await api.put(`/api/admin/mocktests/${id}`, payload);
-      return res.data.mocktest;
+      const formData = new FormData();
+
+      appendFormDataSafely(formData, payload);
+
+      const res = await api.put(`/api/admin/mocktests/${id}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      return res.data.mocktest || res.data;
     } catch (err) {
-      return rejectWithValue("Failed to update mocktest");
+      return rejectWithValue(err.response?.data?.message || "Failed to update mocktest");
     }
   }
 );
 
 /* ============================================================
-   7️⃣ ADMIN — DELETE MOCKTEST
+    7️⃣ ADMIN — DELETE MOCKTEST
 ============================================================= */
 export const deleteMockTest = createAsyncThunk(
   "mocktests/delete",
@@ -111,7 +172,7 @@ export const deleteMockTest = createAsyncThunk(
 );
 
 /* ============================================================
-   8️⃣ ADMIN — TOGGLE PUBLISH
+    8️⃣ ADMIN — TOGGLE PUBLISH
 ============================================================= */
 export const togglePublish = createAsyncThunk(
   "mocktests/togglePublish",
@@ -126,7 +187,7 @@ export const togglePublish = createAsyncThunk(
 );
 
 /* ============================================================
-   9️⃣ PUBLIC — GRAND TEST LEADERBOARD
+    9️⃣ PUBLIC — GRAND TEST LEADERBOARD
 ============================================================= */
 export const fetchGrandTestLeaderboard = createAsyncThunk(
   "mocktests/leaderboard",
@@ -141,27 +202,23 @@ export const fetchGrandTestLeaderboard = createAsyncThunk(
 );
 
 /* ============================================================
-   SLICE
+    SLICE
 ============================================================= */
 const mockTestSlice = createSlice({
   name: "mocktest",
   initialState: {
-    /* PUBLIC */
     publicMocktests: [],
     publicStatus: "idle",
     publicError: null,
 
-    /* PUBLIC — SINGLE */
     selectedMocktest: null,
     selectedStatus: "idle",
     selectedError: null,
 
-    /* ADMIN */
     adminMocktests: [],
     adminStatus: "idle",
     adminError: null,
 
-    /* LEADERBOARD */
     leaderboards: {},
     leaderboardStatus: "idle",
     leaderboardError: null,
@@ -176,8 +233,8 @@ const mockTestSlice = createSlice({
   },
 
   extraReducers: (builder) => {
-    /* PUBLIC LIST */
     builder
+      /* PUBLIC LIST */
       .addCase(fetchPublicMockTests.pending, (state) => {
         state.publicStatus = "loading";
       })
@@ -188,10 +245,9 @@ const mockTestSlice = createSlice({
       .addCase(fetchPublicMockTests.rejected, (state, action) => {
         state.publicStatus = "failed";
         state.publicError = action.payload;
-      });
+      })
 
-    /* PUBLIC SINGLE TEST */
-    builder
+      /* PUBLIC SINGLE */
       .addCase(fetchPublicTestById.pending, (state) => {
         state.selectedStatus = "loading";
       })
@@ -202,10 +258,23 @@ const mockTestSlice = createSlice({
       .addCase(fetchPublicTestById.rejected, (state, action) => {
         state.selectedStatus = "failed";
         state.selectedError = action.payload;
-      });
+      })
 
-    /* ADMIN LIST */
-    builder
+      /* ADMIN SINGLE (FOR EDIT) */
+      .addCase(fetchMockTestByIdForEdit.pending, (state) => {
+        state.selectedStatus = "loading";
+        state.selectedMocktest = null;
+      })
+      .addCase(fetchMockTestByIdForEdit.fulfilled, (state, action) => {
+        state.selectedStatus = "succeeded";
+        state.selectedMocktest = action.payload;
+      })
+      .addCase(fetchMockTestByIdForEdit.rejected, (state, action) => {
+        state.selectedStatus = "failed";
+        state.selectedError = action.payload;
+      })
+
+      /* ADMIN LIST */
       .addCase(fetchAdminMockTests.pending, (state) => {
         state.adminStatus = "loading";
       })
@@ -216,47 +285,43 @@ const mockTestSlice = createSlice({
       .addCase(fetchAdminMockTests.rejected, (state, action) => {
         state.adminStatus = "failed";
         state.adminError = action.payload;
-      });
+      })
 
-    /* CREATE */
-    builder.addCase(createMockTest.fulfilled, (state, action) => {
-      state.adminMocktests.push(action.payload);
-    });
+      /* CREATE */
+      .addCase(createMockTest.fulfilled, (state, action) => {
+        state.adminMocktests.push(action.payload);
+      })
 
-    /* UPDATE */
-    builder.addCase(updateMockTest.fulfilled, (state, action) => {
-      const updated = action.payload;
-      const index = state.adminMocktests.findIndex(
-        (t) => t._id === updated._id
-      );
-      if (index !== -1) state.adminMocktests[index] = updated;
-    });
+      /* UPDATE */
+      .addCase(updateMockTest.fulfilled, (state, action) => {
+        const updated = action.payload;
+        const index = state.adminMocktests.findIndex((t) => t._id === updated._id);
+        if (index !== -1) state.adminMocktests[index] = updated;
 
-    /* DELETE */
-    builder.addCase(deleteMockTest.fulfilled, (state, action) => {
-      state.adminMocktests = state.adminMocktests.filter(
-        (t) => t._id !== action.payload
-      );
-    });
+        if (state.selectedMocktest && state.selectedMocktest._id === updated._id) {
+          state.selectedMocktest = updated;
+        }
+      })
 
-    /* PUBLISH */
-    builder.addCase(togglePublish.fulfilled, (state, action) => {
-      const updated = action.payload;
-      const index = state.adminMocktests.findIndex(
-        (t) => t._id === updated._id
-      );
-      if (index !== -1) state.adminMocktests[index] = updated;
-    });
+      /* DELETE */
+      .addCase(deleteMockTest.fulfilled, (state, action) => {
+        state.adminMocktests = state.adminMocktests.filter((t) => t._id !== action.payload);
+      })
 
-    /* LEADERBOARD */
-    builder
+      /* PUBLISH */
+      .addCase(togglePublish.fulfilled, (state, action) => {
+        const updated = action.payload;
+        const index = state.adminMocktests.findIndex((t) => t._id === updated._id);
+        if (index !== -1) state.adminMocktests[index] = updated;
+      })
+
+      /* LEADERBOARD */
       .addCase(fetchGrandTestLeaderboard.pending, (state) => {
         state.leaderboardStatus = "loading";
       })
       .addCase(fetchGrandTestLeaderboard.fulfilled, (state, action) => {
         state.leaderboardStatus = "succeeded";
-        state.leaderboards[action.payload.mockTestId] =
-          action.payload.leaderboard;
+        state.leaderboards[action.payload.mockTestId] = action.payload.leaderboard;
       })
       .addCase(fetchGrandTestLeaderboard.rejected, (state, action) => {
         state.leaderboardStatus = "failed";

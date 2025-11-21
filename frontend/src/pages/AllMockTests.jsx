@@ -1,3 +1,4 @@
+// frontend/src/pages/AllMockTests.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { IoSearch, IoFunnel, IoClose } from "react-icons/io5";
@@ -12,7 +13,8 @@ import { fetchCategories } from "../redux/categorySlice";
 import FiltersPanel from "../components/FiltersPanel";
 import MockTestCard from "../components/MockTestCard";
 
-export default function AllMockTests() {
+// ADD isEmbedded PROP WITH DEFAULT VALUE
+export default function AllMockTests({ isEmbedded = false }) {
   const dispatch = useDispatch();
 
   // Redux states
@@ -27,7 +29,7 @@ export default function AllMockTests() {
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
 
   /* ============================================================
-     Build Query String
+     (Query/Fetch/Handler logic remains unchanged)
   ============================================================ */
   const buildQuery = (filters) => {
     const params = new URLSearchParams();
@@ -39,24 +41,15 @@ export default function AllMockTests() {
     return qs ? `?${qs}` : "";
   };
 
-  /* ============================================================
-     Load categories once
-  ============================================================ */
   useEffect(() => {
     dispatch(fetchCategories());
   }, [dispatch]);
 
-  /* ============================================================
-     Fetch mocktests whenever filters change
-  ============================================================ */
   useEffect(() => {
     const qs = buildQuery(filters);
     dispatch(fetchPublicMockTests(qs));
   }, [dispatch, filters]);
 
-  /* ============================================================
-     Handlers
-  ============================================================ */
   const handleSearchChange = (e) => {
     dispatch(setPublicSearch(e.target.value));
   };
@@ -73,23 +66,42 @@ export default function AllMockTests() {
   };
 
   /* ============================================================
-     UI
+     UI - CONDITIONAL STYLING CHANGES
   ============================================================ */
-  return (
-    <div className="bg-gray-950 min-h-screen pt-28 pb-16 text-white">
-      <div className="max-w-7xl mx-auto px-4">
+  const containerClass = isEmbedded 
+    ? "text-gray-900" 
+    : "bg-gray-950 min-h-screen pt-28 pb-16 text-white";
+    
+  const contentWrapperClass = isEmbedded 
+    ? "mx-auto" // Adjust for dashboard layout, remove max-width
+    : "max-w-7xl mx-auto px-4";
+  
+  const headerClass = isEmbedded
+    ? "mb-6 text-left" 
+    : "mb-10 text-center";
+    
+  const titleClass = isEmbedded
+    ? "text-2xl font-semibold text-gray-800"
+    : "text-4xl font-extrabold";
 
-        {/* HEADER */}
-        <header className="mb-10 text-center">
-          <h1 className="text-4xl font-extrabold">Explore All Mock Tests</h1>
-          <p className="text-gray-400 mt-3 text-lg">
+  return (
+    <div className={containerClass}>
+      <div className={contentWrapperClass}>
+
+        {/* HEADER - conditionally styled */}
+        <header className={headerClass}>
+          <h1 className={titleClass}>
+            {isEmbedded ? "Explore More Tests" : "Explore All Mock Tests"}
+          </h1>
+          <p className={isEmbedded ? "text-gray-600 mt-1" : "text-gray-400 mt-3 text-lg"}>
             Search & filter test series
           </p>
         </header>
+        {/* END HEADER */}
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
 
-          {/* SIDEBAR */}
+          {/* SIDEBAR - Remains the same */}
           <aside className="hidden md:block md:col-span-1">
             <FiltersPanel
               categories={categories}
@@ -102,17 +114,19 @@ export default function AllMockTests() {
           {/* MAIN CONTENT */}
           <main className="md:col-span-3">
 
-            {/* SEARCH BAR */}
+            {/* SEARCH BAR - conditionally styled */}
             <div className="flex gap-4 mb-8">
               <form
                 onSubmit={handleSearchSubmit}
-                className="flex flex-grow shadow-lg rounded-xl overflow-hidden border border-gray-700 bg-gray-900"
+                // Adjust search bar styles for embedded use to match dashboard theme
+                className={`flex flex-grow shadow-lg rounded-xl overflow-hidden border ${isEmbedded ? 'border-gray-300 bg-white' : 'border-gray-700 bg-gray-900'}`}
               >
                 <input
                   value={filters.q}
                   onChange={handleSearchChange}
                   placeholder="Search tests..."
-                  className="flex-grow p-4 bg-gray-900 text-white outline-none"
+                  // Adjust input text color for light theme
+                  className={`flex-grow p-4 outline-none ${isEmbedded ? 'bg-white text-gray-800' : 'bg-gray-900 text-white'}`}
                 />
                 <button
                   type="submit"
@@ -122,7 +136,7 @@ export default function AllMockTests() {
                 </button>
               </form>
 
-              {/* MOBILE FILTER BTN */}
+              {/* MOBILE FILTER BTN - Adjusted styles if needed */}
               <button
                 onClick={() => setIsFilterPanelOpen(true)}
                 className="md:hidden p-3 bg-gray-900 text-cyan-400 border border-cyan-400 rounded-xl shadow-lg"
@@ -130,8 +144,8 @@ export default function AllMockTests() {
                 <IoFunnel className="h-6 w-6" />
               </button>
             </div>
-
-            MOBILE FILTER DRAWER
+            
+            {/* MOBILE FILTER DRAWER - Remains the same */}
             {isFilterPanelOpen && (
               <div className="fixed inset-0 z-50 bg-black bg-opacity-60 flex justify-end md:hidden">
                 <div className="bg-gray-950 w-full max-w-xs p-6">
@@ -176,9 +190,14 @@ export default function AllMockTests() {
 
             {/* RESULT LIST */}
             {publicStatus === "succeeded" && publicMocktests.length > 0 && (
-              <div className="grid gap-8 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              // Adjust grid for a slightly more compact view inside dashboard column
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2">
                 {publicMocktests.map((test) => (
-                  <MockTestCard key={test._id} test={test} />
+                  <MockTestCard 
+                    key={test._id} 
+                    test={test} 
+                    isEmbedded={isEmbedded} // Pass for optional internal card styling adjustment
+                  />
                 ))}
               </div>
             )}

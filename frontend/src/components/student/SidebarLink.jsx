@@ -1,19 +1,22 @@
+// frontend/src/components/student/SidebarLink.jsx
 import React from 'react';
 
-// Sidebar Link Component
 const SidebarLink = ({ icon, label, isActive, onClick }) => (
   <button
     onClick={onClick}
-    className={`flex items-center w-full px-6 py-3 text-left ${
-      isActive
-        ? 'text-blue-600 bg-blue-50 border-r-4 border-blue-600'
-        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-    } transition-colors duration-150`}
+    className={`
+      flex items-center w-full px-4 py-3 rounded-lg
+      transition-all duration-200 ease-in-out gap-3
+      ${isActive 
+        ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30 border-l-4 border-blue-400"
+        : "text-gray-400 hover:text-white hover:bg-gray-800"
+      }
+    `}
   >
-    <span className={isActive ? 'text-blue-600' : 'text-gray-500'}>
+    <span className={`${isActive ? "text-white" : "text-gray-400"}`}>
       {icon}
     </span>
-    <span className="ml-4 text-sm font-medium">{label}</span>
+    <span className="text-sm font-medium">{label}</span>
   </button>
 );
 

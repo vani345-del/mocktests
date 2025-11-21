@@ -19,7 +19,9 @@ export const getPublicMockTests = async (req, res) => {
     }
 
     const mocktests = await MockTest.find(filter)
-      .populate("category", "name slug");
+  .select("thumbnail title description durationMinutes totalQuestions price isFree isGrandTest category")
+  .populate("category", "name slug");
+
 
     return res.status(200).json(mocktests);
   } catch (err) {
@@ -27,13 +29,17 @@ export const getPublicMockTests = async (req, res) => {
   }
 };
 
-// Single test
 export const getPublicMockTestById = async (req, res) => {
   try {
     const mock = await MockTest.findOne({
       _id: req.params.id,
       isPublished: true
-    }).populate("category", "name slug");
+    })
+      .select(
+        "title description durationMinutes totalQuestions totalMarks " +
+        "isGrandTest isFree thumbnail price category subjects questionIds"
+      )
+      .populate("category", "name slug");
 
     if (!mock) return res.status(404).json({ message: "Mock test not found" });
 

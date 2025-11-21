@@ -1,3 +1,4 @@
+// src/pages/Home.jsx
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -14,8 +15,6 @@ import MockTestCard from "../components/MockTestCard";
 import PremiumTestCard from "../components/PremiumTestCard";
 
 import { fetchCategories } from "../redux/categorySlice";
-
-// ✅ FIX: Public tests must be imported from studentSlice
 import { fetchPublicMockTests } from "../redux/studentSlice";
 
 const Home = () => {
@@ -27,43 +26,40 @@ const Home = () => {
     (state) => state.category
   );
 
-  // ✔ public mocktests come from studentSlice
-  const {
-    publicMocktests,
-    publicStatus,
-  } = useSelector((state) => state.students);
+  const { publicMocktests, publicStatus } = useSelector(
+    (state) => state.students
+  );
 
-  // show only first 4 tests on home page
-  const mockTests = publicMocktests.slice(0, 4);
-  const grandTests = []; // until type is added
+  // 🔥 Split tests properly
+const mockTests = publicMocktests
+  .filter(t => !t.isGrandTest)   // remove grand tests
+  .slice(0, 4);
+
+const grandTests = publicMocktests.filter(t => t.isGrandTest === true);
 
   useEffect(() => {
     dispatch(fetchCategories());
-    dispatch(fetchPublicMockTests("?limit=4")); // public API call
+    dispatch(fetchPublicMockTests("?limit=12")); // get enough to split
   }, [dispatch]);
 
-  // Search button
   const handleSearch = (e) => {
     e.preventDefault();
     navigate(`/mocktests?q=${encodeURIComponent(search)}`);
   };
 
-  // Category click
   const handleCategoryClick = (category) => {
     const slug = category.slug || category._id || category;
     navigate(`/mocktests?category=${encodeURIComponent(slug)}`);
   };
 
+  
+
   return (
-    <div className="min-h-screen bg-gray-950 font-sans antialiased text-gray-100">
+    <div className="min-h-screen bg-gray-950 text-gray-100">
       <Navbar />
 
       <main>
-        <HeroSection
-          search={search}
-          setSearch={setSearch}
-          onSubmit={handleSearch}
-        />
+        <HeroSection search={search} setSearch={setSearch} onSubmit={handleSearch} />
 
         <FeaturesSection />
 
@@ -73,18 +69,18 @@ const Home = () => {
           onCategoryClick={handleCategoryClick}
         />
 
-        {/* Featured Mock Tests */}
+        {/* ⭐ PREMIUM MOCK TESTS */}
         <FeaturedTestsSection
           id="mock-tests"
           title="Top Rated Mock Series"
           tests={mockTests}
           loading={publicStatus === "loading"}
           showViewAll
-          pageContext="home"
           CardComponent={MockTestCard}
           onViewAll={() => navigate("/mocktests")}
         />
 
+        {/* ⭐ GRAND TEST SECTION */}
         <div className="bg-gray-900 border-t border-b border-gray-800">
           <FeaturedTestsSection
             id="grand-tests"
@@ -92,7 +88,6 @@ const Home = () => {
             tests={grandTests}
             loading={publicStatus === "loading"}
             showViewAll
-            pageContext="home"
             CardComponent={PremiumTestCard}
             onViewAll={() => navigate("/mocktests")}
           />
@@ -100,8 +95,6 @@ const Home = () => {
 
         <TestimonialsSection />
       </main>
-
-      <Footer />
     </div>
   );
 };

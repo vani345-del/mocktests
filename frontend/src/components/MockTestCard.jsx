@@ -1,114 +1,203 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Clock, BookOpen, Users, ShoppingCart, Wallet } from "lucide-react";
+import { Clock, BookOpen, Users, ShoppingCart, Wallet, Play } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { addItemToCart } from "../redux/cartSlice";
 import { toast } from "react-toastify";
+import api from "../api/axios";
 
-const MockTestCard = ({ test }) => {
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
-
-  const { userData } = useSelector((state) => state.user);
-
-  // We keep the logic for identifying the test type
-  const isGrand = test.type === "Grand";
-  
-  // Define simple accent colors for visual distinction (using Tailwind defaults)
-  const accentColor = isGrand ? "text-indigo-400" : "text-cyan-400";
-  const accentButton = isGrand ? "bg-indigo-600 hover:bg-indigo-500" : "bg-cyan-600 hover:bg-cyan-500";
-
-  const students = (test.questions * 37) + 500;
-
-  /* ---------------- ADD TO CART ---------------- */
-  const handleAddToCart = () => {
-    // Console log added for debugging clicks
-    console.log("Button: Add to Cart clicked"); 
-    if (!userData) {
-      toast.error("Please login first!");
-      navigate("/login");
-      return;
-    }
-
-    dispatch(addItemToCart(test._id));
-  };
-
-  /* ---------------- BUY NOW ---------------- */
-  const handleBuyNow = () => {
-    // Console log added for debugging clicks
-    console.log("Button: Buy Now clicked");
-    if (!userData) {
-      toast.error("Please login first!");
-      navigate("/login");
-      return;
-    }
-
-    navigate(`/mocktests/${test._id}`);
-  };
-
-  return (
-    // Minimal card container with dark background and shadow
-    <div className="flex flex-col p-5 bg-gray-800 rounded-xl shadow-lg border border-gray-700 max-w-sm mx-auto">
-
-      {/* Title Section */}
-      <div className="mb-4 pb-3 border-b border-gray-700">
-        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
-          {test.category?.name?.toUpperCase() || 'CATEGORY'}
-        </p>
-        <h3 className="text-xl font-bold text-gray-200 line-clamp-2">
-          {test.title}
-        </h3>
-        <p className={`text-sm font-medium ${accentColor} mt-1`}>
-          {isGrand ? "All-India Grand Test" : "Premium Mock Test"}
-        </p>
-      </div>
-
-      {/* Description */}
-      <p className="text-sm text-gray-400 mb-5 line-clamp-3 flex-grow">
-        {test.description}
-      </p>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-3 gap-2 py-4 mb-5 border-y border-gray-700">
-        <StatItem icon={Clock} value={`${test.duration} Min`} label="Duration" accentColor={accentColor} />
-        <StatItem icon={BookOpen} value={`${test.questions} Qs`} label="Questions" accentColor={accentColor} />
-        <StatItem icon={Users} value={students.toLocaleString()} label="Enrolled" accentColor={accentColor} />
-      </div>
-
-      {/* Pricing */}
-      <p className="text-3xl font-extrabold text-gray-100 mb-5">
-        ₹{test.price}
-      </p>
-
-      {/* Action Buttons */}
-      <div className="flex flex-col gap-3 mt-auto w-full">
-        <button
-          onClick={handleAddToCart}
-          className="flex items-center justify-center gap-2 w-full bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition"
-        >
-          <ShoppingCart size={18} />
-          Add to Cart
-        </button>
-
-        <button
-          onClick={handleBuyNow}
-          className={`flex items-center justify-center gap-2 w-full text-white py-3 rounded-lg font-bold transition ${accentButton}`}
-        >
-          <Wallet size={18} />
-          Buy Now
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Helper component for clean stat display
-const StatItem = ({ icon: Icon, value, label, accentColor }) => (
-    <div className="text-center">
-        <Icon size={18} className={`${accentColor} mx-auto mb-1`} />
-        <p className="text-lg font-bold text-white leading-tight">{value}</p>
-        <p className="text-[10px] text-gray-500 uppercase tracking-wider">{label}</p>
+// Helper for Stats
+const StatItem = ({ icon: Icon, value, label, accentLight }) => (
+    <div className="text-center px-1">
+        <Icon size={20} className={`${accentLight} mx-auto mb-1`} />
+        <p className="text-xl font-extrabold text-white leading-tight">{value}</p>
+        <p className="text-xs text-gray-400 uppercase tracking-wider">{label}</p>
     </div>
 );
+
+const MockTestCard = ({ test }) => {
+    const dispatch = useDispatch();
+    const navigate = useNavigate();
+    const { userData } = useSelector((state) => state.user);
+
+    const [fetchedImageURL, setFetchedImageURL] = useState(null);
+    const [loadingImage, setLoadingImage] = useState(false);
+
+    /* ================================
+        IMAGE FETCH LOGIC
+    ================================ */
+    useEffect(() => {
+        if (!test.thumbnail) return;
+
+        const fetchImage = async () => {
+            setLoadingImage(true);
+            try {
+                const response = await api.get(test.thumbnail, { responseType: "blob" });
+                const url = URL.createObjectURL(response.data);
+                setFetchedImageURL(url);
+            } catch (error) {
+                console.error("Failed to fetch mock test image:", error);
+                setFetchedImageURL("https://placehold.co/600x400?text=Image+Load+Error");
+            } finally {
+                setLoadingImage(false);
+            }
+        };
+
+        fetchImage();
+        return () => fetchedImageURL && URL.revokeObjectURL(fetchedImageURL);
+    }, [test.thumbnail]);
+
+    const imageSource = fetchedImageURL || "https://placehold.co/600x400?text=Mock+Test";
+
+    /* ================================
+        LOGIC VARIABLES
+    ================================ */
+    const isFree = test.isFree === true;
+    const isGrand = test.isGrandTest === true;
+    const students = (test.totalQuestions * 37) + 500;
+
+    const accentColor = isGrand ? "from-indigo-500 to-purple-400" : "from-cyan-500 to-teal-400";
+    const accentLight = isGrand ? "text-indigo-400" : "text-cyan-400";
+    const glowColor = isGrand ? "shadow-indigo-500/50" : "shadow-cyan-500/50";
+
+    /* ================================
+        LOGIN CHECK
+    ================================ */
+    const handleLoginCheck = () => {
+        if (!userData) {
+            toast.error("Please login first!");
+            navigate("/login");
+            return false;
+        }
+        return true;
+    };
+
+    /* ================================
+        ADD TO CART
+    ================================ */
+    const handleAddToCart = () => {
+        if (!handleLoginCheck()) return;
+        dispatch(addItemToCart(test._id));
+        toast.success(`${test.title} added to cart!`);
+    };
+
+    /* ================================
+        FREE TEST → START EXAM LOGIC
+        (Same as MyTestCard)
+    ================================ */
+    const handleStartTest = () => {
+        if (!handleLoginCheck()) return;
+
+        const status = test.status || "not_started";
+        const progress = test.progress || 0;
+
+        // Completed test → Report page
+        if (status === "completed") {
+            navigate(`/student/report/${test._id}`);
+            return;
+        }
+
+        // Already started → Resume exam
+        if (progress > 0) {
+            navigate(`/student/instructions/${test._id}`);
+            return;
+        }
+
+        // New → Start exam
+        navigate(`/student/instructions/${test._id}`);
+    };
+
+    /* ================================
+        VIEW DETAILS (For paid tests)
+    ================================ */
+    const handleViewDetails = () => {
+        navigate(`/mocktests/${test._id}`);
+    };
+
+    return (
+        <div
+            className={`
+                group flex flex-col bg-gray-900 rounded-2xl shadow-xl border border-gray-800 
+                transition duration-300 w-full transform hover:scale-[1.03] hover:shadow-2xl hover:${glowColor}
+            `}
+        >
+            {/* THUMBNAIL */}
+            <div className="relative w-full h-48 sm:h-56">
+                {loadingImage ? (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-800 animate-pulse text-gray-500 rounded-t-2xl">
+                        Fetching Image...
+                    </div>
+                ) : (
+                    <img src={imageSource} alt={test.title} className="w-full h-full object-cover rounded-t-2xl" />
+                )}
+
+                {/* Price / Free */}
+                <span
+                    className={`
+                        absolute bottom-0 right-0 px-4 py-2 text-3xl font-extrabold text-white rounded-tl-xl
+                        bg-gradient-to-r ${accentColor} shadow-inner shadow-black/50
+                    `}
+                >
+                    {isFree ? "Free" : `₹${test.price}`}
+                </span>
+
+                {/* FREE / GRAND BADGE */}
+                {(isFree || isGrand) && (
+                    <span className="absolute top-4 left-4 bg-green-500 text-white text-sm font-bold px-4 py-1.5 rounded-full shadow-lg">
+                        {isGrand ? "GRAND TEST" : "FREE"}
+                    </span>
+                )}
+            </div>
+
+            {/* CONTENT */}
+            <Link to={`/mocktests/${test._id}`} className="p-5 pb-0 flex flex-col flex-grow">
+                <div className="mb-4">
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-1">
+                        {test.category?.name?.toUpperCase() || "MOCK SERIES"}
+                    </p>
+                    <h3 className="text-2xl font-extrabold text-white leading-snug line-clamp-2 transition group-hover:text-cyan-300">
+                        {test.title}
+                    </h3>
+                </div>
+
+                <p className="text-sm text-gray-400 mb-5 line-clamp-3 flex-grow">{test.description}</p>
+
+                {/* STATS */}
+                <div className="grid grid-cols-3 gap-2 py-4 border-t border-b border-gray-700/50">
+                    <StatItem icon={Clock} value={test.durationMinutes} label="Duration (Min)" accentLight={accentLight} />
+                    <StatItem icon={BookOpen} value={test.totalQuestions} label="Questions" accentLight={accentLight} />
+                    <StatItem icon={Users} value={students.toLocaleString()} label="Enrolled" accentLight={accentLight} />
+                </div>
+            </Link>
+
+            {/* ACTION BUTTONS */}
+            <div className="p-5 pt-4 flex gap-3 w-full">
+                {isFree ? (
+                    <button
+                        onClick={handleStartTest}
+                        className="flex items-center justify-center gap-2 w-full text-white py-3 rounded-lg font-bold transition bg-green-600 hover:bg-green-500 shadow-md"
+                    >
+                        <Play size={18} /> Start Now
+                    </button>
+                ) : (
+                    <>
+                        <button
+                            onClick={handleViewDetails}
+                            className="flex items-center justify-center gap-2 w-1/2 text-white py-3 rounded-lg font-bold transition bg-cyan-600 hover:bg-cyan-500 shadow-md"
+                        >
+                            <Wallet size={18} /> Buy Now
+                        </button>
+                        <button
+                            onClick={handleAddToCart}
+                            className="flex items-center justify-center gap-2 w-1/2 bg-gray-700 hover:bg-gray-600 text-white py-3 rounded-lg font-semibold transition shadow-md"
+                        >
+                            <ShoppingCart size={18} /> Add to Cart
+                        </button>
+                    </>
+                )}
+            </div>
+        </div>
+    );
+};
 
 export default MockTestCard;

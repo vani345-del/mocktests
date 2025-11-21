@@ -1,4 +1,3 @@
-// backend/routes/mocktestRoutes.js
 import express from "express";
 import {
   createMockTest,
@@ -12,28 +11,39 @@ import {
   submitMockTest,
   getMocktestsByCategory,
   createGlobalQuestion,
-  getFilteredMocktests
+  getFilteredMocktests,
+  getPassagesByCategory
 } from "../controllers/mockTestController.js";
 
 import { isAuth } from "../middleware/isAuth.js";
-import { uploadFile, uploadQuestionImages } from "../middleware/upload.js";
-import { addPassageWithChildren } from "../controllers/mockTestController.js";
-import { uploadAny } from "../middleware/upload.js";
 
+// ⭐ ADD MISSING IMPORT HERE
+import { 
+  uploadFile, 
+  uploadQuestionImages, 
+  uploadImage,          // <-- FIXED
+  uploadAny 
+} from "../middleware/upload.js";
+
+import { addPassageWithChildren } from "../controllers/mockTestController.js";
 
 const router = express.Router();
 
-// ADMIN
-router.post("/", createMockTest);
+/* -------------------- ADMIN -------------------- */
+router.post("/", uploadImage.single("thumbnail"), createMockTest);
 
-// PUBLIC: list mocktests
+/* -------------------- PUBLIC LIST -------------------- */
 router.get("/filter", getFilteredMocktests);
 router.get("/category", getMocktestsByCategory);
 router.get("/published/list", getPublishedMockTests);
+router.get(
+  "/categories/questions/passages",
+  getPassagesByCategory
+);
 
-// QUESTIONS
+/* -------------------- QUESTIONS -------------------- */
 router.post("/questions", isAuth, uploadQuestionImages, createGlobalQuestion);
-//router.post("/questions/bulk-upload", isAuth, uploadFile.single("file"), bulkUploadQuestions);
+
 router.post(
   "/:id/questions/bulk-upload",
   isAuth,
@@ -41,19 +51,19 @@ router.post(
   bulkUploadQuestions
 );
 
-// PASSAGE
+/* -------------------- PASSAGE -------------------- */
 router.post("/:id/questions/passage-bulk", uploadAny, addPassageWithChildren);
 
-// STUDENT SUBMIT
+/* -------------------- STUDENT SUBMIT -------------------- */
 router.post("/:id/submit", isAuth, submitMockTest);
 
-// CRUD
+/* -------------------- CRUD -------------------- */
 router.post("/:id/questions", addQuestion);
 router.get("/:id", getMockTestById);
-router.put("/:id", updateMockTest);
+router.put("/:id", uploadAny, updateMockTest);
+
 router.delete("/:id", deleteMockTest);
 router.put("/:id/publish", togglePublish);
 
-/* -------------------- EXPORT ROUTER -------------------- */
-
+/* -------------------- EXPORT -------------------- */
 export default router;

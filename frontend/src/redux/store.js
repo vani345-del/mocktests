@@ -10,6 +10,7 @@ import instructorReducer from "./instructorSlice";
 import studentReducer from "./studentSlice";
 import paymentReducer from "./paymentSlice";
 import adminStudentReducer from "./adminStudentSlice";
+import attemptsReducer from "./attemptSlice";
 
 
 export const store=configureStore({
@@ -23,6 +24,6 @@ export const store=configureStore({
         students: studentReducer,
         payment: paymentReducer,
         adminStudents: adminStudentReducer, 
-        
+        attempts: attemptsReducer,
     }
 })

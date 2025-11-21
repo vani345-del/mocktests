@@ -87,9 +87,7 @@ export default function AdminQuestions() {
   ------------------------------------------------*/
   const fetchPassages = async (category) => {
     try {
-      const res = await api.get(
-        `/api/admin/categories/questions/passages?category=${encodeURIComponent(category)}`
-      );
+        const res = await api.get(`/api/admin/mocktests/categories/questions/passages?category=${category}`);
       setPassages(res.data.passages || []);
     } catch (err) {
       console.error("fetchPassages error:", err.response?.data || err);

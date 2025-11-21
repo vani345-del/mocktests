@@ -13,25 +13,31 @@ import { toast } from "react-hot-toast";
 const defaultSubject = { name: "", easy: "", medium: "", hard: "" };
 
 // ✅ FIX: Assign default no-op function to onSubmitHandler
-export default function FormMocktest({ onSubmitHandler = () => {}, initialData, formTitle }) { 
+export default function FormMocktest({ onSubmitHandler = () => {}, initialData, formTitle }) {
     const dispatch = useDispatch();
     const navigate = useNavigate();
 
     const { category, id } = useParams();
     const isEditMode = Boolean(id);
 
-   const {
-    selectedMocktest: currentMocktest,
-    selectedStatus,
-    selectedError
-} = useSelector((state) => state.mocktest);
+    // === NEW STATES (Thumbnail + Free) ===
+    const [thumbnail, setThumbnail] = useState(null);
+    const [thumbnailPreview, setThumbnailPreview] = useState(null);
+    const [isFree, setIsFree] = useState(false);
+    // =====================================
 
-const sliceLoading = selectedStatus === "loading";
-const sliceError = selectedError;
+    const {
+        selectedMocktest: currentMocktest,
+        selectedStatus,
+        selectedError
+    } = useSelector((state) => state.mocktest);
+
+    const sliceLoading = selectedStatus === "loading";
+    const sliceError = selectedError;
 
     const [form, setForm] = useState({
         // Use initialData for safe defaults
-        category: category || initialData?.category || "", 
+        category: category || initialData?.category || "",
         subcategory: "",
         title: "",
         description: "",
@@ -60,7 +66,7 @@ const sliceError = selectedError;
     useEffect(() => {
         if (isEditMode && currentMocktest) {
             setForm({
-                category: currentMocktest.category?.slug || category,
+                category: currentMocktest.category?._id || category,
                 subcategory: currentMocktest.subcategory || "",
                 title: currentMocktest.title || "",
                 description: currentMocktest.description || "",
@@ -71,7 +77,14 @@ const sliceError = selectedError;
                 price: currentMocktest.price?.toString() || "",
                 discountPrice: currentMocktest.discountPrice?.toString() || "",
                 isPublished: currentMocktest.isPublished || false,
+
             });
+
+            // ✅ PATCH 2: Load existing FREE + THUMBNAIL
+            setIsFree(currentMocktest.isFree || false);
+            if (currentMocktest.thumbnail) {
+                setThumbnailPreview(currentMocktest.thumbnail);
+            }
 
             if (
                 Array.isArray(currentMocktest.subjects) &&
@@ -141,18 +154,22 @@ const sliceError = selectedError;
         else if (Number(negativeMarking) < 0)
             newErrors.negativeMarking = "Cannot be negative.";
 
-        if (!price.trim()) newErrors.price = "Price is required.";
-        else if (Number(price) < 0) newErrors.price = "Price cannot be negative.";
+        // Validate price fields only if the test is NOT free
+        if (!isFree) {
+            if (!price.trim()) newErrors.price = "Price is required.";
+            else if (Number(price) < 0) newErrors.price = "Price cannot be negative.";
 
-        if (discountPrice.trim() && Number(discountPrice) < 0) {
-            newErrors.discountPrice = "Cannot be negative.";
-        } else if (
-            discountPrice.trim() &&
-            Number(price) > 0 &&
-            Number(discountPrice) >= Number(price)
-        ) {
-            newErrors.discountPrice = "Must be less than price.";
+            if (discountPrice.trim() && Number(discountPrice) < 0) {
+                newErrors.discountPrice = "Cannot be negative.";
+            } else if (
+                discountPrice.trim() &&
+                Number(price) > 0 &&
+                Number(discountPrice) >= Number(price)
+            ) {
+                newErrors.discountPrice = "Must be less than price.";
+            }
         }
+
 
         if (isGrandTest && !scheduledFor) {
             newErrors.scheduledFor = "Schedule date is required for a Grand Test.";
@@ -213,32 +230,38 @@ const sliceError = selectedError;
             hard: Number(s.hard) || 0,
         }));
 
-        const payload = {
-            ...form,
-            durationMinutes: Number(form.durationMinutes),
-            totalMarks: Number(form.totalMarks),
-            negativeMarking: Number(form.negativeMarking),
-            price: Number(form.price),
-            discountPrice: Number(form.discountPrice) || 0,
-            subjects: trimmedSubjects,
-            isPublished: publish,
-            isGrandTest: isGrandTest,
-            scheduledFor: isGrandTest ? scheduledFor : null,
-            totalQuestions: totalQuestions,
-        };
+        // ✅ PATCH 6: Add thumbnail + isFree to PAYLOAD
+      const payload = {
+    ...form,
+    durationMinutes: Number(form.durationMinutes),
+    totalMarks: Number(form.totalMarks),
+    negativeMarking: Number(form.negativeMarking),
+    price: isFree ? 0 : Number(form.price),
+    discountPrice: isFree ? 0 : Number(form.discountPrice) || 0,
+    thumbnail,
+    isFree,
+    subjects: trimmedSubjects,
+    isPublished: publish,
+    isGrandTest,
+    totalQuestions,
+    ...(isGrandTest && { scheduledFor }),   // ✅ FIXED
+};
+
 
         try {
             if (isEditMode) {
                 // --- UPDATE LOGIC (Handled Internally) ---
-                toast.loading("Updating mock test and regenerating questions..."); 
-                
+                toast.loading("Updating mock test and regenerating questions...");
+                console.log("FINAL PAYLOAD BEING SENT:", payload);
+
+
                 const resultAction = await dispatch(updateMockTest({ ...payload, id }));
                 toast.dismiss();
 
                 if (updateMockTest.fulfilled.match(resultAction)) {
                     toast.success("Mock test updated and questions regenerated successfully!");
                     // Navigate back to the main list
-                    navigate(`/admin/mocktests/${payload.category}`); 
+                    navigate(`/admin/mocktests/${payload.category}`);
                 } else {
                     const errorMsg = resultAction.payload || "Failed to update mock test.";
                     toast.error(errorMsg);
@@ -246,13 +269,11 @@ const sliceError = selectedError;
                 }
             } else {
                 // --- CREATE LOGIC (Delegated via Prop) ---
-                // Since onSubmitHandler now defaults to a function, 
-                // we can call it without a crash check, but we keep the logic clean.
-                if (onSubmitHandler) { 
+                if (onSubmitHandler) {
                     await onSubmitHandler(payload, publish);
                 } else {
                     // This line should technically be unreachable now due to the default prop
-                    toast.error("Component setup error: Missing creation handler."); 
+                    toast.error("Component setup error: Missing creation handler.");
                 }
             }
         } catch (err) {
@@ -263,9 +284,6 @@ const sliceError = selectedError;
         }
     };
 
-    // ... (rest of the component, not shown for brevity)
-    
-// ... (JSX render begins)
 
     const displayError = errors.form ? (
         <div className="text-red-400 text-center mb-4">{errors.form}</div>
@@ -353,6 +371,35 @@ const sliceError = selectedError;
                         error={errors.description}
                     />
 
+                    {/* ✅ PATCH 3: THUMBNAIL UPLOAD */}
+                    {/* === THUMBNAIL UPLOAD === */}
+                    <div>
+                        <label className="text-sm text-gray-300">Thumbnail</label>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                    setThumbnail(file);
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => setThumbnailPreview(reader.result);
+                                    reader.readAsDataURL(file);
+                                }
+                            }}
+                            className="mt-2 bg-white/10 border border-white/20 rounded-md px-3 py-2 text-white"
+                        />
+
+                        {thumbnailPreview && (
+                            <img
+                                src={thumbnailPreview}
+                                alt="preview"
+                                className="mt-3 w-32 h-32 object-cover rounded-lg border border-white/20"
+                            />
+                        )}
+                    </div>
+                    {/* END OF THUMBNAIL UPLOAD */}
+
                     {/* Marks & Duration */}
                     <div className="grid md:grid-cols-3 gap-4">
                         <Input
@@ -384,6 +431,25 @@ const sliceError = selectedError;
                         />
                     </div>
 
+                    {/* ✅ PATCH 4: FREE OPTION */}
+                    {/* === FREE OPTION === */}
+                    <div className="flex items-center gap-3 mb-2">
+                        <input
+                            type="checkbox"
+                            checked={isFree}
+                            onChange={(e) => {
+                                setIsFree(e.target.checked);
+                                if (e.target.checked) {
+                                    setForm({ ...form, price: "0", discountPrice: "0" });
+                                }
+                            }}
+                            className="h-5 w-5 text-cyan-400 bg-white/10 border-white/20 rounded"
+                        />
+                        <span className="text-cyan-400 font-medium">Make this test FREE</span>
+                    </div>
+                    {/* END OF FREE OPTION */}
+
+
                     {/* Price Section */}
                     <div className="grid md:grid-cols-2 gap-4">
                         <Input
@@ -391,6 +457,8 @@ const sliceError = selectedError;
                             type="number"
                             name="price"
                             min="0"
+                            // ✅ PATCH 5: Disable price field when FREE
+                            disabled={isFree}
                             value={form.price}
                             onChange={handleFormChange}
                             error={errors.price}
@@ -400,6 +468,8 @@ const sliceError = selectedError;
                             type="number"
                             name="discountPrice"
                             min="0"
+                            // ✅ PATCH 5: Disable discount price field when FREE
+                            disabled={isFree}
                             value={form.discountPrice}
                             onChange={handleFormChange}
                             error={errors.discountPrice}
@@ -565,15 +635,15 @@ const sliceError = selectedError;
                         <div className="grid grid-cols-2 gap-5">
                             <button
                                 onClick={() =>
-                                    navigate(`/admin/mocktests/${id}/questions`) 
+                                    navigate(`/admin/mocktests/${id}/questions`)
                                 }
                                 className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/20 hover:border-cyan-400 p-6 rounded-xl cursor-pointer transition"
                             >
-                                <span className="text-cyan-400 font-bold text-3xl">👁️</span> 
+                                <span className="text-cyan-400 font-bold text-3xl">👁️</span>
                                 <span className="text-white font-medium">Review Generated Questions</span>
                             </button>
 
-                          
+
                         </div>
                     </motion.div>
                 )}

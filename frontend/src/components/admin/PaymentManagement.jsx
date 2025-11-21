@@ -117,7 +117,7 @@ const PaymentManagement = () => {
   // FETCH COURSES / MOCKTESTS for filter dropdown
   const fetchCourses = async () => {
     try {
-      const { data } = await api.get("/api/public/mocktests/published/list"); 
+      const { data } = await api.get("/api/admin/mocktests/published/list"); 
       setCourses(data); 
     } catch (err) {
       console.error("Error fetching courses:", err);

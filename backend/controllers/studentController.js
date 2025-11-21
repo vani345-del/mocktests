@@ -389,9 +389,9 @@ export const getMyPurchasedTests = async (req, res) => {
       .populate({
         path: "purchasedTests",
         model: "MockTest",
-        // --- 👇 ADDED isGrandTest and scheduledFor ---
-        select: "title description durationMinutes totalQuestions categorySlug subjects isGrandTest scheduledFor"
-        // --- 👆 END OF CHANGE ---
+        // FIXED → Added 'thumbnail'
+        select:
+          "title description durationMinutes totalQuestions thumbnail categorySlug subjects isGrandTest scheduledFor"
       })
       .select("purchasedTests");
 
@@ -405,6 +405,7 @@ export const getMyPurchasedTests = async (req, res) => {
     res.status(500).json({ message: "Server error. Could not fetch tests." });
   }
 };
+
 
 // ... other controllers
 
@@ -496,5 +497,18 @@ export const getGrandTestLeaderboard = async (req, res) => {
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     res.status(500).json({ message: 'Server error while fetching leaderboard.' });
+  }
+};
+
+export const getMyAttempts = async (req, res) => {
+  try {
+    const attempts = await Attempt.find({ studentId: req.user.id })
+      .populate("mocktestId", "title totalMarks")
+      .sort({ createdAt: -1 });
+
+    res.json(attempts);
+  } catch (err) {
+    console.error("Error fetching attempts:", err);
+    res.status(500).json({ message: "Failed to fetch attempts" });
   }
 };

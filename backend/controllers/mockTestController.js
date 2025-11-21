@@ -155,153 +155,250 @@ export const getMocktestsByCategory = async (req, res) => {
 };
 
 /* Create mocktest (Stage 1) */
-// backend/controllers/mockTestController.js (replace createMockTest)
 export const createMockTest = async (req, res) => {
-  try {
-    let {
-      category,
-      subcategory = "",
-      title = "",
-      description = "",
-      durationMinutes = 0,
-      totalQuestions: formTotalQuestions,
-      totalMarks = 0,
-      negativeMarking = 0,
-      price = 0,
-      discountPrice = 0,
-      isPublished = false,
-      subjects = [],
-      isGrandTest = false,
-      scheduledFor,
-    } = req.body;
-
-    console.log("createMockTest called. incoming category:", category);
-
-    // Validate required fields early
-    if (!category) {
-      return res.status(400).json({ message: "Category (slug) is required" });
-    }
-    if (!title || !String(title).trim()) {
-      return res.status(400).json({ message: "Title is required" });
-    }
-
-    // Convert slug to ObjectId
-    const foundCategory = await Category.findOne({ slug: category });
-    if (!foundCategory) {
-      return res.status(400).json({ message: "Invalid category slug" });
-    }
-    const categoryId = foundCategory._id; // Use this for MockTest
-
-    // Ensure subjects is parsed
-    const parsedSubjects = (
-      typeof subjects === "string" ? JSON.parse(subjects) : subjects || []
-    ).map((s) => ({
-      name: (s.name || "").trim(),
-      easy: Number(s.easy) || 0,
-      medium: Number(s.medium) || 0,
-      hard: Number(s.hard) || 0,
-    }));
-
-    // Generate question IDs (returns arrays, may be empty)
-    const { questionIds, totalQuestions: generatedTotalQuestions } =
-      await generateQuestionsForTest(parsedSubjects);
-
-    const finalTotalQuestions = generatedTotalQuestions || 0;
-
-    const mt = new MockTest({
-      category: categoryId,
-      categorySlug: foundCategory.slug,
-      subcategory: String(subcategory || "").trim(),
-      title: String(title).trim(),
-      description: String(description || "").trim(),
-      durationMinutes: Number(durationMinutes) || 0,
-      totalQuestions: finalTotalQuestions,
-      totalMarks: Number(totalMarks) || 0,
-      negativeMarking: Number(negativeMarking) || 0,
-      price: Number(price) || 0,
-      discountPrice: Number(discountPrice) || 0,
-      isPublished: !!isPublished,
-      subjects: parsedSubjects,
-      isGrandTest: !!isGrandTest,
-      scheduledFor: !!isGrandTest && scheduledFor ? new Date(scheduledFor) : null,
-      questionIds: questionIds || [],
-    });
-
-    await mt.save();
-
-    // Return a consistent shape
-    return res.status(201).json({ mocktest: mt });
-  } catch (err) {
-    console.error("createMockTest ERROR:", err);
-    return res.status(500).json({ message: "Create mocktest failed", error: err.message });
-  }
-};
-
-// ✅ --- THIS IS THE UPDATE FUNCTION ---
-export const updateMockTest = async (req, res) => {
     try {
-        const { id } = req.params;
-        let updateData = req.body;
+        console.log("📥 Incoming Create MockTest:", req.body);
 
-        // Convert category slug back to ObjectId before updating
-        if (
-            updateData.category &&
-            !mongoose.Types.ObjectId.isValid(updateData.category)
-        ) {
-            const foundCategory = await Category.findOne({
-                slug: updateData.category,
-            });
-            if (!foundCategory) {
-                return res.status(400).json({ message: "Invalid category slug" });
-            }
-            updateData.category = foundCategory._id;
-            updateData.categorySlug = foundCategory.slug;
+        // -------------------------------------
+        // ⭐ 1. Handle Thumbnail Upload
+        // -------------------------------------
+        if (req.file) {
+            req.body.thumbnail = "/uploads/images/" + req.file.filename;
         }
 
-        // Trim strings just in case
-        if (updateData.subcategory)
-            updateData.subcategory = updateData.subcategory.trim();
-        if (updateData.title) updateData.title = updateData.title.trim();
-        if (updateData.description)
-            updateData.description = updateData.description.trim();
-
-        // Ensure subjects are parsed and trimmed
-        if (updateData.subjects) {
-            updateData.subjects = (
-                typeof updateData.subjects === "string"
-                    ? JSON.parse(updateData.subjects)
-                    : updateData.subjects || []
-            ).map((s) => ({
-                ...s,
-                name: s.name.trim(),
-            }));
-            
-            // 🔥 CRITICAL STEP: RE-GENERATE questions if subjects structure changed
-            const { questionIds, totalQuestions } = 
-                await generateQuestionsForTest(updateData.subjects);
-            
-            updateData.questionIds = questionIds;
-            updateData.totalQuestions = totalQuestions;
+        // -------------------------------------
+        // ⭐ 2. Parse subjects (FormData → JSON)
+        // -------------------------------------
+        if (req.body.subjects) {
+            // Note: If parsing fails here, it will throw an exception caught by the catch block.
+            req.body.subjects = JSON.parse(req.body.subjects);
         }
 
+        // -------------------------------------
+        // ⭐ 3. Handle FREE option (Convert 'true'/'false' strings to boolean/number)
+        // -------------------------------------
+        let {
+            isFree,
+            price,
+            discountPrice,
+            isGrandTest, // Get this for boolean check
+            scheduledFor, // Get this for conditional assignment
+            // ... all other fields
+        } = req.body;
+        
+        const isTestFree = (isFree === "true" || isFree === true);
+        const isTestGrand = (isGrandTest === "true" || isGrandTest === true);
 
-        const updatedMockTest = await MockTest.findByIdAndUpdate(id, updateData, {
-            new: true, // Return the modified document
-            runValidators: true, // Run schema validators
+        if (isTestFree) {
+            price = 0;
+            discountPrice = 0;
+        }
+        
+        // -------------------------------------
+        // ⭐ Original Logic (Cleaned up destructuring)
+        // -------------------------------------
+        let {
+            category,
+            subcategory = "",
+            title = "",
+            description = "",
+            durationMinutes = 0,
+            totalQuestions: formTotalQuestions,
+            totalMarks = 0,
+            negativeMarking = 0,
+            isPublished = false,
+            subjects = [],
+            thumbnail,
+        } = req.body;
+
+        console.log("createMockTest called. incoming category:", category);
+
+        if (!category) {
+            return res.status(400).json({ message: "Category (slug) is required" });
+        }
+
+        if (!title || !String(title).trim()) {
+            return res.status(400).json({ message: "Title is required" });
+        }
+
+        // Convert slug to ObjectId
+        const foundCategory = await Category.findOne({ slug: category });
+        if (!foundCategory) {
+            return res.status(400).json({ message: "Invalid category slug" });
+        }
+        const categoryId = foundCategory._id;
+
+        // Convert subjects
+        const parsedSubjects = (subjects || []).map((s) => ({
+            name: (s.name || "").trim(),
+            easy: Number(s.easy) || 0,
+            medium: Number(s.medium) || 0,
+            hard: Number(s.hard) || 0,
+        }));
+
+        // Generate questions
+        const { questionIds, totalQuestions: generatedTotalQuestions } =
+            await generateQuestionsForTest(parsedSubjects);
+
+        const finalTotalQuestions = generatedTotalQuestions || 0;
+
+        // -------------------------------------
+        // ⭐ 4. Create MockTest with Conditional ScheduledFor (THE FIX)
+        // -------------------------------------
+        
+        // Prepare the conditional scheduledFor value outside the constructor
+        let finalScheduledFor = null;
+        if (isTestGrand && scheduledFor) {
+            finalScheduledFor = new Date(scheduledFor);
+        }
+        // If isTestGrand is false, finalScheduledFor remains null, bypassing the 
+        // conditional required validation in the Mongoose schema.
+        
+        const mt = new MockTest({
+            category: categoryId,
+            categorySlug: foundCategory.slug,
+            subcategory: String(subcategory || "").trim(),
+            title: String(title).trim(),
+            description: String(description || "").trim(),
+            durationMinutes: Number(durationMinutes) || 0,
+            totalQuestions: finalTotalQuestions,
+            totalMarks: Number(totalMarks) || 0,
+            negativeMarking: Number(negativeMarking) || 0,
+            price: Number(price) || 0,
+            discountPrice: Number(discountPrice) || 0,
+            isFree: isTestFree,
+            thumbnail: thumbnail || null,
+            isPublished: !!isPublished,
+            subjects: parsedSubjects,
+            isGrandTest: isTestGrand,
+            
+            // ✅ FIX APPLIED: Only set date if it's a Grand Test and a date was provided.
+            scheduledFor: finalScheduledFor, 
+            
+            questionIds: questionIds || [],
         });
 
-        if (!updatedMockTest) {
-            return res.status(404).json({ message: "MockTest not found" });
-        }
+        await mt.save();
 
-        res.status(200).json(updatedMockTest);
+        return res.status(201).json({ mocktest: mt });
+
     } catch (err) {
-        console.error("Error updating mocktest:", err);
-        res
-            .status(500)
-            .json({ message: "Failed to update mocktest", error: err.message });
+        console.error("createMockTest ERROR:", err);
+        
+        // Enhanced Error Handling for Mongoose Validation
+        if (err.name === 'ValidationError') {
+             return res.status(400).json({
+                message: "Validation Failed: " + err.message,
+                errors: Object.keys(err.errors).map(key => err.errors[key].message)
+             });
+        }
+        
+        return res.status(500).json({
+            message: "Create mocktest failed",
+            error: err.message
+        });
     }
 };
+// ✅ --- THIS IS THE UPDATE FUNCTION ---
+// ASSUMED CONTENT OF: ../controllers/mockTestController.js
+
+export const updateMockTest = async (req, res) => {
+    const { id } = req.params;
+    const { 
+        category, subcategory, title, description, 
+        durationMinutes, totalMarks, negativeMarking, 
+        price, discountPrice, isPublished, isGrandTest, scheduledFor 
+    } = req.body;
+    
+    // 🛑 CRITICAL FIX: Safely parse the 'subjects' string.
+    // FormData sends non-file fields as strings.
+    let subjects;
+    try {
+        subjects = req.body.subjects ? JSON.parse(req.body.subjects) : [];
+    } catch (e) {
+        // Handle case where subjects might be invalid JSON
+        console.error("Failed to parse subjects JSON:", req.body.subjects);
+        return res.status(400).json({ message: "Invalid subjects format." });
+    }
+
+    // --- Handling the Thumbnail Safely ---
+    let thumbnailPath;
+    
+    // ✅ FIX 1: Check if a new file was actually uploaded (req.file exists)
+    // The req.file object is only created by the middleware (uploadAny) if a file was sent.
+    if (req.file) {
+        // If a new thumbnail was uploaded, use its path
+        thumbnailPath = req.file.path; 
+    } else {
+        // If no new file, check if the old path was sent in the body (as a string)
+        // or just keep it undefined to prevent overwriting with null/empty string 
+        // if the frontend hasn't explicitly cleared it.
+        // If your frontend sends the old URL back as a string, you might handle it here.
+        // For now, let's assume we fetch the existing thumbnail URL from the DB 
+        // if no new file is uploaded and the field is missing from req.body.
+        
+        // This is a common logic point: We often rely on the controller to NOT 
+        // update fields that are missing in the request body unless we explicitly 
+        // want to clear them.
+        
+        // Let's assume you handle fetching and preserving the old one within your Mongoose update logic 
+        // if 'thumbnail' is missing from the update object. 
+        // If your frontend logic is to send 'thumbnail: null' when clearing, you must handle that separately.
+    }
+    // -------------------------------------
+
+
+    try {
+        // 1. Find the mock test by ID
+        const mockTest = await MockTest.findById(id); 
+        
+        if (!mockTest) {
+            return res.status(404).json({ message: "Mock test not found" });
+        }
+
+        // 2. Update all fields from the request body
+        mockTest.category = category;
+        mockTest.subcategory = subcategory;
+        mockTest.title = title;
+        mockTest.description = description;
+        mockTest.durationMinutes = durationMinutes;
+        mockTest.totalMarks = totalMarks;
+        mockTest.negativeMarking = negativeMarking;
+        
+        // Use price/discount price as provided by the frontend payload
+        mockTest.price = price;
+        mockTest.discountPrice = discountPrice;
+        
+        // 3. Conditionally update thumbnail only if a new one was uploaded
+        if (thumbnailPath) {
+            // Delete old file if it exists, then save new path
+            // (You should include logic to delete the old file here)
+            mockTest.thumbnail = thumbnailPath;
+        } 
+        
+        // 4. Update complex array fields
+        mockTest.subjects = subjects; 
+        
+        // 5. Update booleans and conditional fields
+        mockTest.isPublished = isPublished;
+        mockTest.isGrandTest = isGrandTest;
+        mockTest.scheduledFor = isGrandTest ? scheduledFor : undefined; 
+        
+        // 6. Save and return
+        const updatedMockTest = await mockTest.save();
+
+        res.status(200).json({ 
+            message: "Mock test updated successfully!",
+            mocktest: updatedMockTest 
+        });
+
+    } catch (error) {
+        console.error("Error updating mock test:", error);
+        // This is the line that generates the 500 error log
+        res.status(500).json({ message: "Server error during update: " + error.message });
+    }
+};
+
 // ✅ --- END OF UPDATE FUNCTION ---
 export const submitMockTest = async (req, res) => {
     try {
@@ -594,7 +691,6 @@ export const updateStatus = async (req, res) => {
   }
 };
 
-// ✅ Toggle Publish/Unpublish
 export const togglePublish = async (req, res) => {
   try {
     const mocktest = await MockTest.findById(req.params.id);
@@ -916,3 +1012,29 @@ export const addPassageWithChildren = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+export const getPassagesByCategory = async (req, res) => {
+  try {
+    const { category } = req.query;
+
+    if (!category) {
+      return res.status(400).json({ message: "Category is required" });
+    }
+
+    // Find "passage" type questions filtered by subject/category
+    const passages = await Question.find({
+      questionType: "passage",
+      category: category
+    }).select("title questionImageUrl category difficulty");
+
+    return res.status(200).json(passages);
+
+  } catch (err) {
+    console.error("❌ getPassagesByCategory error:", err);
+    return res.status(500).json({
+      message: "Failed to fetch passage questions",
+      error: err.message
+    });
+  }
+};
+

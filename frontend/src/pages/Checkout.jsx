@@ -1,25 +1,49 @@
-import React from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
-import api from '../api/axios';
-import toast from 'react-hot-toast';
-import { clearCart } from '../redux/cartSlice';
-import { setUserData } from '../redux/userSlice';
-import { ShoppingCart } from 'lucide-react'; // Import icon for empty state
+import React, { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import api from "../api/axios";
+import toast from "react-hot-toast";
+import { clearCart } from "../redux/cartSlice";
+import { setUserData } from "../redux/userSlice";
 
-const Checkout = () => {
+// Icons
+import { ShoppingCart, User, Mail, Phone } from "lucide-react";
+
+export default function Checkout() {
     const dispatch = useDispatch();
     const navigate = useNavigate();
 
-    // SAFE selectors
     const cartItems = useSelector((state) => state.cart.cartItems || []);
-    const totalAmount = useSelector((state) => state.cart.totalAmount || 0);
-    const { user } = useSelector((state) => state.user);
+    const user = useSelector((state) => state.user.userData);
 
-    // Load Razorpay script
+    // ---------- CORRECT PRICE LOGIC ----------
+    const subtotal = cartItems.reduce(
+        (acc, item) =>
+            acc +
+            (item.discountPrice > 0
+                ? item.discountPrice
+                : item.price),
+        0
+    );
+
+    const discount = cartItems.reduce((acc, item) => {
+        const fullPrice = item.price || 0;
+        const finalPrice =
+            item.discountPrice > 0
+                ? item.discountPrice
+                : item.price;
+
+        return acc + (fullPrice - finalPrice);
+    }, 0);
+
+    const totalAmount = subtotal;
+    const amountInPaisa = Math.round(totalAmount * 100);
+    const isFreePurchase = amountInPaisa === 0;
+
+    // ---------- Razorpay Loader ----------
     const loadRazorpayScript = (src) => {
         return new Promise((resolve) => {
-            const script = document.createElement('script');
+            const script = document.createElement("script");
             script.src = src;
             script.onload = () => resolve(true);
             script.onerror = () => resolve(false);
@@ -27,192 +51,206 @@ const Checkout = () => {
         });
     };
 
+    // ---------- PAYMENT HANDLER ----------
     const handlePayment = async () => {
-        const toastId = toast.loading('Processing payment...');
+        const toastId = toast.loading(
+            isFreePurchase ? "Processing enrollment..." : "Initializing payment..."
+        );
 
-        const res = await loadRazorpayScript('https://checkout.razorpay.com/v1/checkout.js');
-        if (!res) {
-            toast.error('Failed to load Razorpay.', { id: toastId });
+        if (!isFreePurchase) {
+            const loaded = await loadRazorpayScript(
+                "https://checkout.razorpay.com/v1/checkout.js"
+            );
+            if (!loaded) {
+                toast.error("Failed to load payment gateway", { id: toastId });
+                return;
+            }
+        }
+
+        // ⭐ FREE ENROLLMENT
+        if (isFreePurchase) {
+            try {
+                const res = await api.post("/api/payment/enroll-free", {
+                    cartItems: cartItems.map((i) => i._id),
+                });
+
+                if (res.data.success) {
+                    toast.success("Enrolled Successfully!", { id: toastId });
+                    dispatch(setUserData(res.data.user));
+                    dispatch(clearCart());
+                    navigate("/student-dashboard");
+                } else {
+                    toast.error("Enrollment failed", { id: toastId });
+                }
+            } catch (err) {
+                toast.error("Enrollment failed", { id: toastId });
+            }
             return;
         }
 
+        // ⭐ PAID ORDER
         try {
-            // ⭐ LOGIC CHANGE: Check for zero amount and handle as enrollment/free purchase
-            const amountInRupees = totalAmount; 
-            const amountInPaisa = Math.round(amountInRupees * 100);
-
-            if (amountInPaisa === 0) {
-                // If total is 0, skip Razorpay and call the backend endpoint directly for free enrollment
-                const { data } = await api.post('/api/payment/enroll-free', {
-                    cartItems: cartItems.map(item => item._id),
-                });
-                
-                if (data.success) {
-                    toast.success('Enrollment Successful!', { id: toastId });
-                    dispatch(setUserData(data.user));
-                    dispatch(clearCart());
-                    navigate('/student-dashboard');
-                } else {
-                    toast.error('Free enrollment failed.', { id: toastId });
-                }
-                return;
-            }
-
-
-            // Create Razorpay order (for paid amount)
-            const { data: order } = await api.post('/api/payment/create-order', {
-                amount: amountInPaisa, // Razorpay requires amount in paise
-                cartItems: cartItems.map(item => item._id)
+            const { data: order } = await api.post("/api/payment/create-order", {
+                amount: amountInPaisa,
+                cartItems: cartItems.map((i) => i._id),
             });
-
-            if (!order) {
-                toast.error('Could not create payment order.', { id: toastId });
-                return;
-            }
 
             const options = {
                 key: import.meta.env.VITE_RAZORPAY_KEY_ID,
                 amount: order.amount,
-                currency: 'INR',
-                name: 'GrandTest Store',
-                description: 'Mock Test Purchase',
-                image: '/logo.png',
+                currency: "INR",
+                name: "GrandTest Store",
+                description: "Mock Test Purchase",
                 order_id: order.id,
 
                 handler: async function (response) {
-                    try {
-                        const { data } = await api.post('/api/payment/verify-payment', {
-                            razorpay_payment_id: response.razorpay_payment_id,
-                            razorpay_order_id: response.razorpay_order_id,
-                            razorpay_signature: response.razorpay_signature,
-                            cartItems: cartItems.map(item => item._id),
-                            amount: amountInPaisa // Pass amount in paise for verification
-                        });
+                    const verify = await api.post("/api/payment/verify-payment", {
+                        razorpay_payment_id: response.razorpay_payment_id,
+                        razorpay_order_id: response.razorpay_order_id,
+                        razorpay_signature: response.razorpay_signature,
+                        cartItems: cartItems.map((i) => i._id),
+                        amount: amountInPaisa,
+                    });
 
-                        if (data.success) {
-                            toast.success('Payment Successful!', { id: toastId });
-                            dispatch(setUserData(data.user));
-                            dispatch(clearCart());
-                            navigate('/student-dashboard');
-                        } else {
-                            toast.error('Verification failed', { id: toastId });
-                        }
-                    } catch (error) {
-                        toast.error('Verification error', { id: toastId });
+                    if (verify.data.success) {
+                        toast.success("Payment Successful!", { id: toastId });
+                        dispatch(setUserData(verify.data.user));
+                        dispatch(clearCart());
+                        navigate("/student-dashboard");
+                    } else {
+                        toast.error("Verification failed", { id: toastId });
                     }
                 },
 
                 prefill: {
-                    name: user?.name || "Student",
-                    email: user?.email || "student@example.com",
-                    contact: user?.phone || '', // Added contact if available
+                    name: user?.name,
+                    email: user?.email,
+                    contact: user?.phone,
                 },
 
-                theme: {
-                    color: '#4F46E5',
-                },
+                theme: { color: "#4F46E5" },
             };
 
             toast.dismiss(toastId);
-            const paymentObject = new window.Razorpay(options);
-            paymentObject.open();
-
-            paymentObject.on('payment.failed', () => {
-                toast.error('Payment failed! Try again.');
-            });
-
-        } catch (error) {
-            // Check for specific error message from the backend if order creation failed
-            const errorMessage = error.response?.data?.message || 'Payment error occurred. Check server logs.';
-            toast.error(errorMessage, { id: toastId });
+            const rp = new window.Razorpay(options);
+            rp.open();
+        } catch (err) {
+            toast.error("Payment failed. Try again.", { id: toastId });
         }
     };
 
-    // --- RENDER START ---
-    
-    // Empty Cart State (Enhanced Design)
-    if (!cartItems || cartItems.length === 0) {
+    // -------------- EMPTY CART UI --------------
+    if (cartItems.length === 0) {
         return (
-            <div className="max-w-4xl mx-auto pt-40 text-center p-4">
-                <div className="flex flex-col items-center justify-center p-10 bg-white rounded-xl shadow-2xl border border-gray-100">
-                    <ShoppingCart size={48} className="text-gray-400 mb-4" />
-                    <h2 className="text-3xl font-bold text-gray-800">Your Cart is Empty</h2>
-                    <p className="text-gray-500 mt-2 mb-8">It looks like you haven't added any tests yet.</p>
-                    <button
-                        onClick={() => navigate('/mocktests')}
-                        className="bg-indigo-600 text-white px-8 py-3 rounded-full font-semibold shadow-md hover:bg-indigo-700 transition-all"
-                    >
-                        Browse Mock Tests
-                    </button>
-                </div>
+            <div className="bg-gray-900 min-h-screen flex flex-col items-center justify-center px-4 text-center">
+                <ShoppingCart size={64} className="text-gray-600 mb-6" />
+                <h2 className="text-3xl font-bold text-gray-200">Your Cart is Empty</h2>
+                <button
+                    onClick={() => navigate("/mocktests")}
+                    className="mt-6 bg-indigo-600 px-8 py-3 rounded-lg text-white font-semibold hover:bg-indigo-700 shadow-lg"
+                >
+                    Browse Mock Tests
+                </button>
             </div>
         );
     }
 
     return (
-        <div className="bg-gray-50 min-h-screen pt-28 pb-16 px-4">
-            <div className="max-w-3xl mx-auto">
+        <div className="bg-gray-950 min-h-screen pt-24 pb-16 px-3 sm:px-4 text-white font-sans">
+            <div className="max-w-5xl mx-auto">
 
-                <h1 className="text-4xl font-extrabold text-gray-900 mb-10 text-center">
+                <h1 className="text-3xl sm:text-4xl font-extrabold text-center mb-10 leading-tight">
+                    <ShoppingCart size={28} className="inline mr-2 text-cyan-400" />
                     Secure Checkout
                 </h1>
 
-                <div className="bg-white p-6 md:p-8 rounded-xl shadow-2xl border border-gray-100">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
 
-                    {/* Order Summary */}
-                    <h2 className="text-2xl font-bold text-gray-900 mb-6 border-b border-gray-200 pb-4">
-                        Order Summary
-                    </h2>
+                    {/* LEFT COLUMN: USER INFO */}
+                    <div className="md:col-span-1 space-y-4 hidden md:block">
+                        <div className="bg-gray-900 p-5 rounded-xl border border-gray-800">
+                            <h3 className="text-lg font-bold text-cyan-400 mb-4 flex items-center">
+                                <User size={20} className="mr-2" /> Your Details
+                            </h3>
 
-                    <div className="space-y-4 max-h-80 overflow-y-auto pr-2">
-                        {cartItems.map((item) => (
-                            <div
-                                key={item._id}
-                                className="flex justify-between items-center p-4 bg-gray-50 rounded-lg shadow-sm"
-                            >
-                                <span className="font-medium text-gray-800 truncate pr-4">{item.title}</span>
-                                <span className="font-bold text-lg text-gray-900 whitespace-nowrap">
-                                    {/* Display 'FREE' if price is zero */}
-                                    {item.discountPrice === 0 || item.price === 0 
-                                        ? "FREE" 
-                                        : `₹${item.discountPrice > 0 ? item.discountPrice : item.price}`
-                                    }
-                                </span>
+                            <div className="space-y-2 text-sm text-gray-300">
+                                <p className="flex items-center"><User size={16} className="mr-2 text-indigo-400" /> {user?.name}</p>
+                                <p className="flex items-center"><Mail size={16} className="mr-2 text-indigo-400" /> {user?.email}</p>
+                                <p className="flex items-center"><Phone size={16} className="mr-2 text-indigo-400" /> {user?.phone}</p>
                             </div>
-                        ))}
-                    </div>
+                        </div>
 
-                    {/* Total Section */}
-                    <div className="border-t border-gray-300 mt-6 pt-6">
-                        <div className="flex justify-between text-2xl font-extrabold text-gray-900">
-                            <span>Total Payable</span>
-                            {/* Display Total Amount */}
-                            <span className="text-indigo-600">
-                                {totalAmount === 0 ? "FREE" : `₹${totalAmount.toFixed(2)}`}
-                            </span>
+                        <div className="p-4 bg-green-900/30 border border-green-700 rounded-xl text-center">
+                            <p className="text-sm font-semibold text-green-400">
+                                🔒 Transactions secured by Razorpay
+                            </p>
                         </div>
                     </div>
 
-                    {/* Checkout Button */}
-                    <button
-                        onClick={handlePayment}
-                        className={`mt-8 w-full py-4 text-xl font-bold rounded-xl transition-all duration-300 shadow-lg 
-                            ${totalAmount === 0 
-                                ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-500/50' 
-                                : 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-500/50'
-                            }`
-                        }
-                    >
-                        {totalAmount === 0 ? "Enroll Now (FREE)" : `Pay ₹${totalAmount.toFixed(2)}`}
-                    </button>
-                    
-                    <p className="text-xs text-gray-500 mt-3 text-center">
-                        Powered by Razorpay. All transactions are secure.
-                    </p>
+                    {/* RIGHT COLUMN: ORDER SUMMARY */}
+                    <div className="md:col-span-2 bg-gray-900 p-5 sm:p-6 rounded-xl border border-gray-800">
+
+                        <h2 className="text-xl sm:text-2xl font-bold mb-4 border-b border-gray-700 pb-2">
+                            Items ({cartItems.length})
+                        </h2>
+
+                        {/* SCROLLABLE CART LIST */}
+                        <div className="space-y-2 max-h-72 sm:max-h-80 overflow-y-auto pr-1">
+                            {cartItems.map((item) => (
+                                <div
+                                    key={item._id}
+                                    className="flex justify-between items-center p-3 bg-gray-800 rounded-lg"
+                                >
+                                    <span className="text-sm sm:text-base text-gray-200">
+                                        {item.title}
+                                    </span>
+
+                                    <span className="font-bold text-sm text-cyan-400">
+                                        {item.discountPrice === 0
+                                            ? "FREE"
+                                            : `₹${item.discountPrice > 0 ? item.discountPrice : item.price}`}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* PRICE SUMMARY */}
+                        <div className="mt-6 pt-4 border-t border-gray-700 space-y-2 text-sm sm:text-base">
+
+                            <div className="flex justify-between text-gray-400">
+                                <span>Subtotal:</span>
+                                <span>₹{subtotal.toFixed(2)}</span>
+                            </div>
+
+                            <div className="flex justify-between text-red-400 font-semibold">
+                                <span>Discount:</span>
+                                <span>- ₹{discount.toFixed(2)}</span>
+                            </div>
+
+                            <div className="flex justify-between pt-4 border-t border-gray-700 text-2xl sm:text-3xl font-extrabold">
+                                <span>Total:</span>
+                                <span className={isFreePurchase ? "text-green-400" : "text-indigo-400"}>
+                                    {isFreePurchase ? "FREE" : `₹${totalAmount.toFixed(2)}`}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* PAYMENT BUTTON */}
+                        <button
+                            onClick={handlePayment}
+                            className={`mt-8 w-full py-3 sm:py-4 text-lg sm:text-xl font-bold rounded-xl transition ${
+                                isFreePurchase
+                                    ? "bg-green-600 hover:bg-green-500"
+                                    : "bg-indigo-600 hover:bg-indigo-500"
+                            }`}
+                        >
+                            {isFreePurchase
+                                ? "Enroll Now (FREE)"
+                                : `Pay ₹${totalAmount.toFixed(2)}`}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
-};
-
-export default Checkout;
+}

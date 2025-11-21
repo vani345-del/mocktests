@@ -1,6 +1,20 @@
 import User from "../models/Usermodel.js";
 import MockTest from "../models/MockTest.js";
 
+// Helper: ensure each cart item has imageUrl (fallback to thumbnail)
+const normalizeCartItems = (cartArr) => {
+  // cartArr: array of MockTest documents (populated)
+  // convert to plain objects and ensure imageUrl exists
+  return cartArr.map((doc) => {
+    const obj = (doc && doc.toObject) ? doc.toObject() : doc;
+    // prefer existing imageUrl, otherwise use thumbnail if present
+    if (!obj.imageUrl && obj.thumbnail) {
+      obj.imageUrl = obj.thumbnail;
+    }
+    return obj;
+  });
+};
+
 // @desc    Get user's cart
 // @route   GET /api/cart
 // @access  Private
@@ -9,15 +23,18 @@ export const getCart = async (req, res) => {
     const user = await User.findById(req.user.id).populate({
       path: 'cart',
       model: 'MockTest',
-      select: 'title price discountPrice imageUrl categorySlug' // Select fields you want to show in cart
+      select: 'title price discountPrice thumbnail imageUrl categorySlug' // include thumbnail
     });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
-    res.json(user.cart);
+
+    const normalized = normalizeCartItems(user.cart || []);
+    return res.json(normalized);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("GET_CART_ERROR:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
@@ -26,45 +43,42 @@ export const getCart = async (req, res) => {
 // @access  Private
 export const addToCart = async (req, res) => {
   try {
-    const { mocktestId } = req.body;
-    
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: 'Not authenticated, req.user not found.' });
-    }
-    const userId = req.user.id;
+    const { mockTestId } = req.body;  // frontend sends mockTestId
      
+    if (!mockTestId) {
+      return res.status(400).json({ message: "mockTestId is required." });
+    }
 
-    // Check if test exists
-    const test = await MockTest.findById(mocktestId);
+    const userId = req.user.id;
+
+    // Check test exists
+    const test = await MockTest.findById(mockTestId).select('title price discountPrice thumbnail imageUrl categorySlug');
     if (!test) {
       return res.status(404).json({ message: "Mock test not found" });
     }
 
-   const user = await User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
       userId,
-      { $addToSet: { cart: mocktestId } }, // $addToSet prevents duplicates
+      { $addToSet: { cart: mockTestId } },   
       { new: true }
     ).populate({
       path: 'cart',
       model: 'MockTest',
-      select: 'title price discountPrice imageUrl categorySlug'
+      select: 'title price discountPrice thumbnail imageUrl categorySlug'
     });
-    res.json(user.cart);
-  } 
-  catch (error) {
-    // --- THIS IS THE CRITICAL FIX ---
-    console.error("❌ ADD_TO_CART_ERROR:", error); // Log the full error to your backend terminal
-    res.status(500).json({ 
-      message: "Server error while adding to cart.", 
-      error: error.message, // Send the specific error message back to the frontend
-      fullError: error // (Optional: send full error in development)
+
+    const normalized = normalizeCartItems(user.cart || []);
+    // Return both the new item and the updated cart (frontend expects newItem)
+    return res.json({
+      message: "Added to cart",
+      newItem: (test && test.toObject) ? (() => { const o = test.toObject(); if(!o.imageUrl && o.thumbnail) o.imageUrl = o.thumbnail; return o; })() : test,
+      cart: normalized
     });
-    // ---------------------------------
+
+  } catch (error) {
+    console.error("ADD_TO_CART_ERROR:", error);
+    return res.status(500).json({ message: "Server error while adding to cart.", error: error.message });
   }
-
-
-
-
 };
 
 // @desc    Remove item from cart
@@ -82,11 +96,13 @@ export const removeFromCart = async (req, res) => {
     ).populate({
       path: 'cart',
       model: 'MockTest',
-      select: 'title price discountPrice imageUrl categorySlug'
+      select: 'title price discountPrice thumbnail imageUrl categorySlug'
     });
 
-    res.json(user.cart);
+    const normalized = normalizeCartItems(user.cart || []);
+    return res.json(normalized);
   } catch (error) {
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("REMOVE_FROM_CART_ERROR:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
